@@ -16,29 +16,30 @@ def combine_wforms(fname):
 
     :param str fname: filename of input XML.
     """
-    print("Processing file %s, parsing XML..." % fname)
+    print("File: %s")
+    print("Parsing XML..." % fname)
     tree = ET.parse(fname)
     root = tree.getroot()
     print("... done!")
 
     print("Processing waveforms...")
-    wform_tot = None
+
+    wforms = []
     # Loops through every "event" in the XML, each with a "trace" (waveform)
     for i,child in enumerate(root.iter("event")):
-        # print(child.tag, child.attrib)
-        # Use int as dtype to ensure numpy arithmetic
-        wform = np.array(child.find("trace").text.split()).astype(int)
+        # Trace is spaced wform values, split on spaces and convert to np array.
+        # Use int as dtype to ensure numpy arithmetic.
+        wforms.append(np.array(child.find("trace").text.split()).astype(int))
+        if (i % 100) == 0:
+            print("    %i processed...\r" % i, end="")
 
-        # First wform case
-        if wform_tot is None:
-            wform_tot = wform
-        else:
-            wform_tot += wform
-
+    wform_tot = sum(wforms)
     wform_avg = wform_tot/i
     print("... done! %i waveforms processed" % i)
 
     return (wform_avg, wform_tot)
+
+# TODO: Separate total and average plots
 
 for fname in fnames:
     wform_avg, wvform_tot = combine_wforms(fname)
