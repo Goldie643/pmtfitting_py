@@ -16,8 +16,8 @@ def combine_wforms(fname):
 
     :param str fname: filename of input XML.
     """
-    print("File: %s")
-    print("Parsing XML..." % fname)
+    print("File: %s" % fname)
+    print("Parsing XML...")
     tree = ET.parse(fname)
     root = tree.getroot()
     print("... done!")
@@ -39,11 +39,8 @@ def combine_wforms(fname):
 
     return (wform_avg, wform_tot)
 
-# TODO: Separate total and average plots
-
 for fname in fnames:
-    wform_avg, wvform_tot = combine_wforms(fname)
+    wform_avg, wform_tot = combine_wforms(fname)
     plt.plot(range(len(wform_avg)), wform_avg, label=fname)
-# plt.plot(range(len(wform_tot)), wform_tot)
 plt.legend()
 plt.show()
