@@ -67,10 +67,23 @@ def fit_wform(wform):
 
     model = mod_bg + mod_peak
 
-    return
+    # Guess the center as the global minimum
+    g1_center = np.argmin(wform)
+
+    params = model.make_params(g1_amplitude=-20, g1_center=g1_center, 
+        g1_sigma=2, lin_amplitude=120)
+
+    result = model.fit(wform, params, x=list(range(len(wform))))
+
+    print(result.fit_report())
+
+    return result
+
 
 for fname in fnames:
     wform_avg = combine_wforms(fname)
-    plt.plot(range(len(wform_avg)), wform_avg, label=fname)
+    plt.scatter(range(len(wform_avg)), wform_avg, marker="+")
+    result = fit_wform(wform_avg)
+    plt.plot(range(len(wform_avg)), result.best_fit, label=fname)
 plt.legend()
 plt.show()
