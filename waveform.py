@@ -5,6 +5,7 @@ import pickle
 from glob import glob
 from sys import argv
 from os.path import splitext
+from lmfit.models import LinearModel, GaussianModel
 
 # Use glob to expand wildcards
 fnames = []
@@ -44,7 +45,6 @@ def combine_wforms(fname):
         # Trace is spaced wform values. Split on spaces and convert to np array.
         # Use int as dtype to ensure numpy arithmetic.
         wforms.append(np.array(child.find("trace").text.split()).astype(int))
-        if i>10: break
         if (i % 100) == 0:
             print("    %i processed...\r" % i, end="")
 
@@ -57,6 +57,17 @@ def combine_wforms(fname):
     print("... done! %i waveforms processed." % i)
 
     return wform_avg
+
+def fit_wform(wform):
+    """
+    Fits the waveform, assuming linear background and gaussian peak.
+    """
+    mod_bg = LinearModel(prefix="lin_")
+    mod_peak = GaussianModel(prefix="g1_")
+
+    model = mod_bg + mod_peak
+
+    return
 
 for fname in fnames:
     wform_avg = combine_wforms(fname)
