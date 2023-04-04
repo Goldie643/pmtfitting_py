@@ -7,12 +7,8 @@ from sys import argv
 from os.path import splitext
 from lmfit.models import LinearModel, GaussianModel
 
-# Use glob to expand wildcards
-fnames = []
-for arg in argv[1:]:
-    fnames += glob(arg)
-
-print(fnames)
+# Resolution of the CAEN digitiser
+digi_res = 4 # ns
 
 def combine_wforms(fname):
     """
@@ -61,29 +57,44 @@ def combine_wforms(fname):
 def fit_wform(wform):
     """
     Fits the waveform, assuming linear background and gaussian peak.
+
+    :param np.array wform: Numpy array of the waveform to fit.
     """
     mod_bg = LinearModel(prefix="lin_")
     mod_peak = GaussianModel(prefix="g1_")
 
     model = mod_bg + mod_peak
 
-    # Guess the center as the global minimum
-    g1_center = np.argmin(wform)
+    # Guess the center as the global minimum, scaled by digitiser res
+    g1_center = digi_res*np.argmin(wform)
 
     params = model.make_params(g1_amplitude=-20, g1_center=g1_center, 
         g1_sigma=2, lin_amplitude=120)
 
-    result = model.fit(wform, params, x=list(range(len(wform))))
+    xs = [digi_res*x for x in range(len(wform))]
+    result = model.fit(wform, params, x=xs)
 
     print(result.fit_report())
 
     return result
 
 
-for fname in fnames:
-    wform_avg = combine_wforms(fname)
-    plt.scatter(range(len(wform_avg)), wform_avg, marker="+")
-    result = fit_wform(wform_avg)
-    plt.plot(range(len(wform_avg)), result.best_fit, label=fname)
-plt.legend()
-plt.show()
+def main():
+    # Use glob to expand wildcards
+    fnames = []
+    for arg in argv[1:]:
+        fnames += glob(arg)
+
+    for fname in fnames:
+        wform_avg = combine_wforms(fname)
+        # Scale xs to match resolution
+        xs = [digi_res*x for x in range(len(wform_avg))]
+        plt.scatter(xs, wform_avg, marker="+")
+        result = fit_wform(wform_avg)
+        plt.plot(xs, result.best_fit, label=fname)
+    plt.legend()
+    plt.xlabel("t [ns]")
+    plt.ylabel("V [mV]")
+    plt.show()
+
+if __name__ == "__main__": main()
