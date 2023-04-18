@@ -10,50 +10,6 @@ from lmfit.models import LinearModel, GaussianModel
 # Resolution of the CAEN digitiser
 digi_res = 4 # ns
 
-def combine_wforms(fname):
-    """
-    Opens CAEN digitizer XML output.
-    Combines traces to to return average waveform.
-
-    :param str fname: filename of input XML.
-    """
-    print("File: %s" % fname)
-    split_fname = splitext(fname)
-
-    # If pickle file is passed just load wform list from that
-    if split_fname[1] == ".pkl":
-        print("Loading from Pickle...")
-        with open(fname, "rb") as f:
-            wforms = pickle.load(f)
-        wform_avg = sum(wforms)/len(wforms)
-        print("... done!")
-        return wform_avg
-
-    print("Parsing XML...")
-    tree = ET.parse(fname)
-    root = tree.getroot()
-    print("... done!")
-
-    print("Processing waveforms...")
-    wforms = []
-    # Loops through every "event" in the XML, each with a "trace" (waveform)
-    for i,child in enumerate(root.iter("event")):
-        # Trace is spaced wform values. Split on spaces and convert to np array.
-        # Use int as dtype to ensure numpy arithmetic.
-        wforms.append(np.array(child.find("trace").text.split()).astype(int))
-        if (i % 100) == 0:
-            print("    %i processed...\r" % i, end="")
-
-    # Dump waveforms to pickle (quicker than parsing XML each time)
-    pickle_fname = split_fname[0]+".pkl"
-    with open(pickle_fname, "wb") as f:
-        pickle.dump(wforms, f)
-
-    wform_avg = sum(wforms)/len(wforms)
-    print("... done! %i waveforms processed." % i)
-
-    return wform_avg
-
 def fit_wform(wform):
     """
     Fits the waveform, assuming linear background and gaussian peak.
@@ -71,13 +27,71 @@ def fit_wform(wform):
     params = model.make_params(g1_amplitude=-20, g1_center=g1_center, 
         g1_sigma=2, lin_amplitude=120)
 
+    # Scale x to fit to real time values
     xs = [digi_res*x for x in range(len(wform))]
     result = model.fit(wform, params, x=xs)
 
-    print(result.fit_report())
+    # print(result.fit_report())
 
     return result
 
+def process_wforms(fname):
+    """
+    Opens CAEN digitizer XML output.
+    Combines traces to to return average waveform.
+
+    :param str fname: filename of input XML.
+    """
+    print("File: %s" % fname)
+    split_fname = splitext(fname)
+
+    if split_fname[1] == ".pkl":
+        # If pickle file is passed just load wform list from that
+        print("Loading from Pickle...")
+        with open(fname, "rb") as f:
+            wforms = pickle.load(f)
+        print("... done! %i waveforms loaded." % len(wforms))
+    else:
+        print("Parsing XML...")
+        tree = ET.parse(fname)
+        root = tree.getroot()
+        print("... done!")
+
+        print("Loading waveforms...")
+        wforms = []
+        # Loops through every "event" in the XML, each with a "trace" (waveform)
+        for i,child in enumerate(root.iter("event")):
+            # Trace is spaced wform values. Split on spaces and convert to np array.
+            # Use int as dtype to ensure numpy arithmetic.
+            wform = np.array(child.find("trace").text.split()).astype(int)
+            wforms.append(wform)
+            if (i % 100) == 0:
+                print("    %i loaded...\r" % i, end="")
+        print("... done! %i waveforms loaded." % i)
+    
+    fits = []
+    failed_fits = 0
+    # Fit wforms, add gaussian centre to histo
+    print("Fitting waveforms...")
+    for i,wform in enumerate(wforms):
+        fit = fit_wform(wform)
+        if fit.success:
+            fits.append(fit)
+        else:
+            failed_fits += 1
+
+        if (i % 100) == 0:
+            print("    %i fitted, %i failed...\r" % (i,failed_fits), end="")
+    print("... done! %i waveforms fitted, %i failed." % (i,failed_fits))
+
+    # Dump waveforms to pickle (quicker than parsing XML each time)
+    pickle_fname = split_fname[0]+".pkl"
+    with open(pickle_fname, "wb") as f:
+        pickle.dump(wforms, f)
+
+    wform_avg = sum(wforms)/len(wforms)
+
+    return fits, wform_avg
 
 def main():
     # Use glob to expand wildcards
@@ -86,12 +100,33 @@ def main():
         fnames += glob(arg)
 
     for fname in fnames:
-        wform_avg = combine_wforms(fname)
+        fits, wform_avg = process_wforms(fname)
+
+        # Keep American spelling for consistency...
+        # Get the centre of every fit, if it's within the range
+        centers = []
+        for fit in fits:
+            center = fit.params["g1_center"].value 
+            if center < 1200:
+                centers.append(center)
+
+        # 1st figure is plot of peak centres
+        plt.figure(1)
+        plt.hist(centers, bins=100)
+
+        # 2nd figure is the averaged waveform
+        plt.figure(2)
         # Scale xs to match resolution
         xs = [digi_res*x for x in range(len(wform_avg))]
         plt.scatter(xs, wform_avg, marker="+")
         result = fit_wform(wform_avg)
         plt.plot(xs, result.best_fit, label=fname)
+    plt.figure(1)
+    plt.xlabel("t [ns]")
+    plt.xlim([0,1200])
+    plt.yscale("log")
+
+    plt.figure(2)
     plt.legend()
     plt.xlabel("t [ns]")
     plt.ylabel("V [mV]")
