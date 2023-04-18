@@ -69,20 +69,25 @@ def process_wforms(fname):
                 print("    %i loaded...\r" % i, end="")
         print("... done! %i waveforms loaded." % i)
     
-    fits = []
-    failed_fits = 0
-    # Fit wforms, add gaussian centre to histo
-    print("Fitting waveforms...")
-    for i,wform in enumerate(wforms):
-        fit = fit_wform(wform)
-        if fit.success:
-            fits.append(fit)
-        else:
-            failed_fits += 1
+    # Fitting every waveform, far too slow
+    #
+    # fits = []
+    # failed_fits = 0
+    # # Fit wforms, add gaussian centre to histo
+    # print("Fitting waveforms...")
+    # for i,wform in enumerate(wforms):
+    #     fit = fit_wform(wform)
+    #     if fit.success:
+    #         fits.append(fit)
+    #     else:
+    #         failed_fits += 1
 
-        if (i % 100) == 0:
-            print("    %i fitted, %i failed...\r" % (i,failed_fits), end="")
-    print("... done! %i waveforms fitted, %i failed." % (i,failed_fits))
+    #     if (i % 100) == 0:
+    #         print("    %i fitted, %i failed...\r" % (i,failed_fits), end="")
+    # print("... done! %i waveforms fitted, %i failed." % (i,failed_fits))
+
+    # Take the minimum value in the waveform as the centre of the pulse
+    centers = [digi_res*np.argmin(wform) for wform in wforms]
 
     # Dump waveforms to pickle (quicker than parsing XML each time)
     pickle_fname = split_fname[0]+".pkl"
@@ -91,7 +96,7 @@ def process_wforms(fname):
 
     wform_avg = sum(wforms)/len(wforms)
 
-    return fits, wform_avg
+    return centers, wform_avg
 
 def main():
     # Use glob to expand wildcards
@@ -100,15 +105,18 @@ def main():
         fnames += glob(arg)
 
     for fname in fnames:
-        fits, wform_avg = process_wforms(fname)
-
         # Keep American spelling for consistency...
+        centers, wform_avg = process_wforms(fname)
+
+        # Getting centre of fits is too slow
+        # can optimise but for now will use argmin
+        #
         # Get the centre of every fit, if it's within the range
-        centers = []
-        for fit in fits:
-            center = fit.params["g1_center"].value 
-            if center < 1200:
-                centers.append(center)
+        # centers = []
+        # for fit in fits:
+        #     center = fit.params["g1_center"].value 
+        #     if center < 1200:
+        #         centers.append(center)
 
         # 1st figure is plot of peak centres
         plt.figure(1)
