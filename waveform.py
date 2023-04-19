@@ -6,9 +6,11 @@ from glob import glob
 from sys import argv
 from os.path import splitext, exists
 from lmfit.models import LinearModel, GaussianModel
+from scipy.signal import find_peaks
 
 # Resolution of the CAEN digitiser
 digi_res = 4 # ns
+qhist_bins = 200
 
 def fit_wform(wform):
     """
@@ -34,6 +36,38 @@ def fit_wform(wform):
     # print(result.fit_report())
 
     return result
+
+def find_peaks(qs):
+    """
+    Finds peaks using scipy.signal.find_peaks, in the integrated charge
+    histogram. Doesn't work very well.
+
+    :param list of int qs: The integrated charges from each individual waveform.
+    """
+    qs_hist = np.histogram(qs, bins=qhist_bins)
+    print(qs_hist)
+
+    bin_width = qs_hist[1][1] - qs_hist[1][0]
+    plt.bar(qs_hist[1][:-1],qs_hist[0],width=bin_width)
+    plt.yscale("log")
+
+    peaks = find_peaks(qs_hist[0])[0]
+    print("%i peak(s) found with indices: " % len(peaks), end="")
+    print(peaks)
+
+    plt.vlines([peak*bin_width for peak in peaks],0,1e5)
+    plt.show()
+
+    return
+
+def fit_qhist(qs):
+    """
+    Fits Gaussians to the integrated charge histogram, fitting the pedestal, 1pe
+    and 2pe peaks. Bins within the function.
+
+    :param list of int qs: The integrated charges from each individual waveform.
+    """
+    pass
 
 def quick_qint(wform):
     """
@@ -147,9 +181,13 @@ def main():
         # Keep American spelling for consistency...
         qs, wform_avg = process_wforms(fname)
 
+        # Fit the integrated charge histo
+        fit_qhist(qs)
+        exit()
+
         # 1st figure is plot of peak centres
         plt.figure(1)
-        plt.hist(qs, bins=500, label=fname)
+        plt.hist(qs, bins=qhist_bins, label=fname)
 
         # 2nd figure is the averaged waveform
         plt.figure(2)
