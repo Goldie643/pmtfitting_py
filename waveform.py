@@ -10,7 +10,8 @@ from scipy.signal import find_peaks
 
 # Resolution of the CAEN digitiser
 digi_res = 4 # ns
-qhist_bins = 200
+qhist_bins = 200 # Numbe of bins to use when fitting and histing qint
+peak_guess = [0, 250, 500] # Guesses at where the ped, 1pe and 2pe peaks will be
 
 def fit_wform(wform):
     """
@@ -44,6 +45,7 @@ def find_peaks(qs):
 
     :param list of int qs: The integrated charges from each individual waveform.
     """
+
     qs_hist = np.histogram(qs, bins=qhist_bins)
     print(qs_hist)
 
@@ -67,7 +69,55 @@ def fit_qhist(qs):
 
     :param list of int qs: The integrated charges from each individual waveform.
     """
-    pass
+    
+    # Bin the integrated charges 
+    qs_hist, qs_binedges = np.histogram(qs, bins=qhist_bins)
+    # Get centre of bins instead of edges
+    bin_width = qs_binedges[1]-qs_binedges[0]
+
+    # Includes all edges, get rid of last edge
+    qs_bincentres = qs_binedges[:-1] + (bin_width/2)
+
+    # Scale bin values to area normalise to 1
+    qs_hist = qs_hist/len(qs)
+
+    # Linear flat background, gaussians for each peak
+    # mod_bg = LinearModel(prefix="bg_")
+    mod_ped = GaussianModel(prefix="gped_")
+    mod_1pe = GaussianModel(prefix="g1pe_")
+    mod_2pe = GaussianModel(prefix="g2pe_")
+
+    model = mod_ped + mod_1pe + mod_2pe
+
+    params = model.make_params(
+        bg_amplitude=0,
+        gped_center=peak_guess[0],
+        g1pe_center=peak_guess[1],
+        g2pe_center=peak_guess[2],
+        gped_amplitude=2,
+        g1pe_amplitude=3,
+        g2pe_amplitude=1.5,
+        gped_sigma=10,
+        g1pe_sigma=100,
+        g2pe_sigma=100
+    )
+
+    # Scale x to fit to real time values
+    result = model.fit(qs_hist, params, x=qs_bincentres)
+
+    components = result.eval_components()
+
+    # plt.plot(qs_bincentres, qs_hist)
+    # plt.hist(qs, bins=qhist_bins, label="Data", density=True)
+    plt.bar(qs_bincentres, qs_hist, width=bin_width, label="Data", alpha=0.5)
+    # plt.plot(qs_bincentres, result.init_fit, "--", c="grey", alpha=0.5)
+    plt.plot(qs_bincentres, result.best_fit, label="Best Fit (Composite)")
+    for name, sub_mod in components.items():
+        plt.plot(qs_bincentres, sub_mod, label=name)
+    plt.legend()
+    plt.show()
+
+    return result 
 
 def quick_qint(wform):
     """
@@ -182,20 +232,21 @@ def main():
         qs, wform_avg = process_wforms(fname)
 
         # Fit the integrated charge histo
-        fit_qhist(qs)
-        exit()
+        qfit = fit_qhist(qs)
 
         # 1st figure is plot of peak centres
         plt.figure(1)
-        plt.hist(qs, bins=qhist_bins, label=fname)
+        # Density=True makes it area normalised, same as the fit
+        plt.hist(qs, bins=qhist_bins, label=fname, density=True)
+        plt.plot(range(qhist_bins), qfit.best_fit)
 
         # 2nd figure is the averaged waveform
         plt.figure(2)
         # Scale xs to match resolution
         xs = [digi_res*x for x in range(len(wform_avg))]
         plt.scatter(xs, wform_avg, marker="+")
-        result = fit_wform(wform_avg)
-        plt.plot(xs, result.best_fit, label=fname)
+        wform_fit = fit_wform(wform_avg)
+        plt.plot(xs, wform_fit.best_fit, label=fname)
     plt.figure(1)
     plt.legend()
     plt.xlabel("t [ns]")
