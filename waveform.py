@@ -117,16 +117,16 @@ def fit_qhist(qs):
     # Get each individual component of the model
     components = qfit.eval_components()
 
-    plt.bar(qs_bincentres, qs_hist, width=bin_width, label="Data", alpha=0.5)
-    # plt.hist(qs, bins=qhist_bins, label="Data", alpha=0.5)
-    # plt.plot(qs_bincentres, qfit.init_fit, "--", c="grey", alpha=0.5)
-    plt.plot(qs_bincentres, qfit.best_fit, label="Best Fit (Composite)")
+    qfit_fig, qfit_ax = plt.subplots()
+    qfit_ax.bar(qs_bincentres, qs_hist, width=bin_width, label="Data", alpha=0.5)
+    # qfit_ax.hist(qs, bins=qhist_bins, label="Data", alpha=0.5, density=True)
+    # qfit_ax.plot(qs_bincentres, qfit.init_fit, "--", c="grey", alpha=0.5)
+    qfit_ax.plot(qs_bincentres, qfit.best_fit, label="Best Fit (Composite)")
     # Plot each component/submodel
     for name, sub_mod in components.items():
         # Get rid of underscore on prefix for submod name
-        plt.plot(qs_bincentres, sub_mod, label=name[:-1])
-    plt.legend()
-    plt.show()
+        qfit_ax.plot(qs_bincentres, sub_mod, label=name[:-1])
+    qfit_ax.legend()
 
     return qfit, qs_hist, qs_bincentres, bin_width
 
@@ -238,6 +238,10 @@ def main():
     for arg in argv[1:]:
         fnames += glob(arg)
 
+    # Set up plotting figs/axes
+    qint_fig, qint_ax = plt.subplots()
+    wform_fig, wform_ax = plt.subplots()
+
     for fname in fnames:
         # Keep American spelling for consistency...
         qs, wform_avg = process_wforms(fname)
@@ -245,28 +249,25 @@ def main():
         # Fit the integrated charge histo
         qfit, qs_hist, qs_bincentres, bin_width = fit_qhist(qs)
 
-        # 1st figure is plot of peak centres
-        plt.figure(1)
-        plt.bar(qs_bincentres, qs_hist, width=bin_width, alpha=0.5)
-        plt.plot(qs_bincentres, qfit.best_fit, label=fname)
+        # Plot integrated charges using the histogram info given by fit_qhist()
+        qint_ax.bar(qs_bincentres, qs_hist, width=bin_width, alpha=0.5)
+        # qint_ax.plot(qs_bincentres, qfit.best_fit, label=fname)
 
-        # 2nd figure is the averaged waveform
-        plt.figure(2)
+        # Now plot average wform
         # Scale xs to match resolution
         xs = [digi_res*x for x in range(len(wform_avg))]
-        plt.scatter(xs, wform_avg, marker="+")
+        wform_ax.scatter(xs, wform_avg, marker="+")
         wform_fit = fit_wform(wform_avg)
-        plt.plot(xs, wform_fit.best_fit, label=fname)
-    plt.figure(1)
-    plt.legend()
-    plt.yscale("log")
-    plt.xlabel("Integrated Charge")
-    # plt.yscale("log")
+        wform_ax.plot(xs, wform_fit.best_fit, label=fname)
 
-    plt.figure(2)
-    plt.legend()
-    plt.xlabel("t [ns]")
-    plt.ylabel("V [mV]")
+    qint_ax.legend()
+    qint_ax.set_yscale("log")
+    qint_ax.set_xlabel("Integrated Charge")
+
+    wform_ax.legend()
+    wform_ax.set_xlabel("t [ns]")
+    wform_ax.set_ylabel("V [mV]")
+
     plt.show()
 
 if __name__ == "__main__": main()
