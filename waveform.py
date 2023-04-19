@@ -79,7 +79,7 @@ def fit_qhist(qs):
     qs_bincentres = qs_binedges[:-1] + (bin_width/2)
 
     # Scale bin values to area normalise to 1
-    qs_hist = qs_hist/len(qs)
+    qs_hist = qs_hist/(sum(qs_hist)*bin_width)
 
     # Linear flat background, gaussians for each peak
     # mod_bg = LinearModel(prefix="bg_")
@@ -87,37 +87,48 @@ def fit_qhist(qs):
     mod_1pe = GaussianModel(prefix="g1pe_")
     mod_2pe = GaussianModel(prefix="g2pe_")
 
+    # Combine all Gaussians for fit
     model = mod_ped + mod_1pe + mod_2pe
+
+    # Pedestal should be highest peak
+    gped_amp_guess = max(qs_hist)
+    # For usual LED settings, subsequent peaks should be smaller
+    # Halving is just a guess
+    g1pe_amp_guess = gped_amp_guess/2
+    g2pe_amp_guess = g1pe_amp_guess/2
 
     params = model.make_params(
         bg_amplitude=0,
         gped_center=peak_guess[0],
         g1pe_center=peak_guess[1],
         g2pe_center=peak_guess[2],
-        gped_amplitude=2,
-        g1pe_amplitude=3,
-        g2pe_amplitude=1.5,
+        gped_amplitude=gped_amp_guess,
+        g1pe_amplitude=g1pe_amp_guess,
+        g2pe_amplitude=g2pe_amp_guess,
+        # These are again, general guesses
         gped_sigma=10,
         g1pe_sigma=100,
         g2pe_sigma=100
     )
 
     # Scale x to fit to real time values
-    result = model.fit(qs_hist, params, x=qs_bincentres)
+    qfit = model.fit(qs_hist, params, x=qs_bincentres)
 
-    components = result.eval_components()
+    # Get each individual component of the model
+    components = qfit.eval_components()
 
-    # plt.plot(qs_bincentres, qs_hist)
-    # plt.hist(qs, bins=qhist_bins, label="Data", density=True)
     plt.bar(qs_bincentres, qs_hist, width=bin_width, label="Data", alpha=0.5)
-    # plt.plot(qs_bincentres, result.init_fit, "--", c="grey", alpha=0.5)
-    plt.plot(qs_bincentres, result.best_fit, label="Best Fit (Composite)")
+    # plt.hist(qs, bins=qhist_bins, label="Data", alpha=0.5)
+    # plt.plot(qs_bincentres, qfit.init_fit, "--", c="grey", alpha=0.5)
+    plt.plot(qs_bincentres, qfit.best_fit, label="Best Fit (Composite)")
+    # Plot each component/submodel
     for name, sub_mod in components.items():
-        plt.plot(qs_bincentres, sub_mod, label=name)
+        # Get rid of underscore on prefix for submod name
+        plt.plot(qs_bincentres, sub_mod, label=name[:-1])
     plt.legend()
     plt.show()
 
-    return result 
+    return qfit, qs_hist, qs_bincentres, bin_width
 
 def quick_qint(wform):
     """
@@ -232,13 +243,12 @@ def main():
         qs, wform_avg = process_wforms(fname)
 
         # Fit the integrated charge histo
-        qfit = fit_qhist(qs)
+        qfit, qs_hist, qs_bincentres, bin_width = fit_qhist(qs)
 
         # 1st figure is plot of peak centres
         plt.figure(1)
-        # Density=True makes it area normalised, same as the fit
-        plt.hist(qs, bins=qhist_bins, label=fname, density=True)
-        plt.plot(range(qhist_bins), qfit.best_fit)
+        plt.bar(qs_bincentres, qs_hist, width=bin_width, alpha=0.5)
+        plt.plot(qs_bincentres, qfit.best_fit, label=fname)
 
         # 2nd figure is the averaged waveform
         plt.figure(2)
@@ -249,8 +259,9 @@ def main():
         plt.plot(xs, wform_fit.best_fit, label=fname)
     plt.figure(1)
     plt.legend()
-    plt.xlabel("t [ns]")
     plt.yscale("log")
+    plt.xlabel("Integrated Charge")
+    # plt.yscale("log")
 
     plt.figure(2)
     plt.legend()
