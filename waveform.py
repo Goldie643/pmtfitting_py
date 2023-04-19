@@ -209,7 +209,7 @@ def process_wforms(fname):
     wform_avg = sum(wforms)/len(wforms)
     
     # Pull integrated charges from file if it exists
-    q_fname = split_fname[0] + "_q.pkl"
+    q_fname = split_fname[0] + ".qpkl"
     if exists(q_fname):
         with open(q_fname, "rb") as f:
             qs = pickle.load(f)
