@@ -149,7 +149,7 @@ def main():
 
         # 1st figure is plot of peak centres
         plt.figure(1)
-        plt.hist(qs, bins=500)
+        plt.hist(qs, bins=500, label=fname)
 
         # 2nd figure is the averaged waveform
         plt.figure(2)
@@ -159,8 +159,8 @@ def main():
         result = fit_wform(wform_avg)
         plt.plot(xs, result.best_fit, label=fname)
     plt.figure(1)
+    plt.legend()
     plt.xlabel("t [ns]")
-    plt.xlim([0,1200])
     plt.yscale("log")
 
     plt.figure(2)
