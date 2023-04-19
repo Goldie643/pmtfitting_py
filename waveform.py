@@ -4,7 +4,7 @@ import numpy as np
 import pickle
 from glob import glob
 from sys import argv
-from os.path import splitext
+from os.path import splitext, exists
 from lmfit.models import LinearModel, GaussianModel
 
 # Resolution of the CAEN digitiser
@@ -34,6 +34,41 @@ def fit_wform(wform):
     # print(result.fit_report())
 
     return result
+
+def quick_qint(wform):
+    """
+    Finds the integral of a pulse, defined by a window around the global
+    minimum in the waveform.
+
+    :param np.array wform: Numpy array of the waveform to fit.
+    """
+    # Take the argmin as the peak
+    peak_i = np.argmin(wform)
+
+    # Halfsize of window in indices (NOT time)
+    win_halfsize = 5
+
+    # Define window around centre as peak, size determined by eye.
+    peak_wform = wform[(peak_i-win_halfsize):(peak_i+win_halfsize)]
+
+    # TODO: Deal with afterpulses
+    # Get baseline from average of all points outside window
+    non_peak = np.append(wform[:peak_i-win_halfsize], wform[:peak_i+win_halfsize])
+    baseline = sum(non_peak)/len(non_peak)
+
+    # Integrate Q from within window, considering baseline
+    # Effectively flip, offset to 0, integrate
+    peak_wform_mod = [baseline-x for x in peak_wform]
+    qint = sum(peak_wform_mod)*digi_res
+
+    return qint
+
+def scan_qint(wform):
+    # Slide window over whole waveform, integrating
+    # Take the largest (actually smallest) window, define that as integral
+    # Take basline outside window, minus off INTEGRATED baseline
+
+    pass
 
 def process_wforms(fname):
     """
@@ -68,35 +103,39 @@ def process_wforms(fname):
             if (i % 100) == 0:
                 print("    %i loaded...\r" % i, end="")
         print("... done! %i waveforms loaded." % i)
-    
-    # Fitting every waveform, far too slow
-    #
-    # fits = []
-    # failed_fits = 0
-    # # Fit wforms, add gaussian centre to histo
-    # print("Fitting waveforms...")
-    # for i,wform in enumerate(wforms):
-    #     fit = fit_wform(wform)
-    #     if fit.success:
-    #         fits.append(fit)
-    #     else:
-    #         failed_fits += 1
 
-    #     if (i % 100) == 0:
-    #         print("    %i fitted, %i failed...\r" % (i,failed_fits), end="")
-    # print("... done! %i waveforms fitted, %i failed." % (i,failed_fits))
+        # Dump waveforms to pickle (quicker than parsing XML each time)
+        pickle_fname = split_fname[0]+".pkl"
+        with open(pickle_fname, "wb") as f:
+            pickle.dump(wforms, f)
+        print("Saved to file %s." % pickle_fname)
 
-    # Take the minimum value in the waveform as the centre of the pulse
-    centers = [digi_res*np.argmin(wform) for wform in wforms]
-
-    # Dump waveforms to pickle (quicker than parsing XML each time)
-    pickle_fname = split_fname[0]+".pkl"
-    with open(pickle_fname, "wb") as f:
-        pickle.dump(wforms, f)
-
+    # Average waveform
     wform_avg = sum(wforms)/len(wforms)
+    
+    # Pull integrated charges from file if it exists
+    q_fname = split_fname[0] + "_q.pkl"
+    if exists(q_fname):
+        with open(q_fname, "rb") as f:
+            qs = pickle.load(f)
+        return qs, wform_avg
 
-    return centers, wform_avg
+    # Otherwise, calculate
+    qs = []
+    print("Finding charge integrals...")
+    for i,wform in enumerate(wforms):
+        try:
+            qs.append(quick_qint(wform))
+        except IndexError:
+            continue
+        if (i % 100) == 0:
+            print("    %i calculated...\r" % i, end="")
+    print("... done! %i calculated." % i)
+    with open(q_fname, "wb") as f:
+        pickle.dump(qs, f)
+    print("Saved to file %s." % q_fname)
+
+    return qs, wform_avg
 
 def main():
     # Use glob to expand wildcards
@@ -106,21 +145,11 @@ def main():
 
     for fname in fnames:
         # Keep American spelling for consistency...
-        centers, wform_avg = process_wforms(fname)
-
-        # Getting centre of fits is too slow
-        # can optimise but for now will use argmin
-        #
-        # Get the centre of every fit, if it's within the range
-        # centers = []
-        # for fit in fits:
-        #     center = fit.params["g1_center"].value 
-        #     if center < 1200:
-        #         centers.append(center)
+        qs, wform_avg = process_wforms(fname)
 
         # 1st figure is plot of peak centres
         plt.figure(1)
-        plt.hist(centers, bins=100)
+        plt.hist(qs, bins=500)
 
         # 2nd figure is the averaged waveform
         plt.figure(2)
