@@ -82,6 +82,7 @@ def fit_qhist(qs):
     qs_hist = qs_hist/(sum(qs_hist)*bin_width)
 
     # Linear flat background, gaussians for each peak
+    # Don't currently use BG as it reduces effectiveness at fitting 2pe peak
     # mod_bg = LinearModel(prefix="bg_")
     mod_ped = GaussianModel(prefix="gped_")
     mod_1pe = GaussianModel(prefix="g1pe_")
@@ -98,7 +99,7 @@ def fit_qhist(qs):
     g2pe_amp_guess = g1pe_amp_guess/2
 
     params = model.make_params(
-        bg_amplitude=0,
+        # bg_amplitude=0,
         gped_center=peak_guess[0],
         g1pe_center=peak_guess[1],
         g2pe_center=peak_guess[2],
@@ -128,7 +129,12 @@ def fit_qhist(qs):
         qfit_ax.plot(qs_bincentres, sub_mod, label=name[:-1])
     qfit_ax.legend()
 
-    return qfit, qs_hist, qs_bincentres, bin_width
+    # Set lower limit to half a bin to avoid weird scaling
+    # Remembering it's area normalised
+    qfit_ax.set_ylim(bottom=0.5/len(qs))
+    qfit_ax.set_yscale("log")
+
+    return qfit, qs_hist, qs_bincentres, bin_width, qfit_ax, qfit_fig
 
 def quick_qint(wform):
     """
@@ -247,11 +253,12 @@ def main():
         qs, wform_avg = process_wforms(fname)
 
         # Fit the integrated charge histo
-        qfit, qs_hist, qs_bincentres, bin_width = fit_qhist(qs)
+        qfit, qs_hist, qs_bincentres, bin_width, qfit_ax, qfit_fig = fit_qhist(qs)
+        qfit_ax.set_title(fname)
 
         # Plot integrated charges using the histogram info given by fit_qhist()
         qint_ax.bar(qs_bincentres, qs_hist, width=bin_width, alpha=0.5)
-        # qint_ax.plot(qs_bincentres, qfit.best_fit, label=fname)
+        qint_ax.plot(qs_bincentres, qfit.best_fit, label=fname)
 
         # Now plot average wform
         # Scale xs to match resolution
@@ -262,6 +269,9 @@ def main():
 
     qint_ax.legend()
     qint_ax.set_yscale("log")
+    # Set lower limit to half a bin to avoid weird scaling
+    # Remembering it's area normalised
+    qint_ax.set_ylim(bottom=0.5/len(qs))
     qint_ax.set_xlabel("Integrated Charge")
 
     wform_ax.legend()
