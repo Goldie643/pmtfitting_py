@@ -27,8 +27,12 @@ def fit_wform(wform):
     # Guess the center as the global minimum, scaled by digitiser res
     g1_center = digi_res*np.argmin(wform)
 
-    params = model.make_params(g1_amplitude=-20, g1_center=g1_center, 
-        g1_sigma=2, lin_amplitude=120)
+    try:
+        params = model.make_params(g1_amplitude=-20, g1_center=g1_center, 
+            g1_sigma=2, lin_amplitude=120)
+    except:
+        print("!!Issue setting wform fit model params!!")
+        params = model.make_params()
 
     # Scale x to fit to real time values
     xs = [digi_res*x for x in range(len(wform))]
@@ -164,13 +168,6 @@ def quick_qint(wform):
 
     return qint
 
-def scan_qint(wform):
-    # Slide window over whole waveform, integrating
-    # Take the largest (actually smallest) window, define that as integral
-    # Take basline outside window, minus off INTEGRATED baseline
-
-    pass
-
 def process_wforms(fname):
     """
     Opens CAEN digitizer XML output.
@@ -213,6 +210,11 @@ def process_wforms(fname):
 
     # Average waveform
     wform_avg = sum(wforms)/len(wforms)
+
+    # Show a few example waveforms
+    # for wform in wforms[:3]:
+    #     plt.plot(range(len(wform)), wform)
+    #     plt.show()
     
     # Pull integrated charges from file if it exists
     q_fname = split_fname[0] + ".qpkl"
