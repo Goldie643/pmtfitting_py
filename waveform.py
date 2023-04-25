@@ -5,13 +5,13 @@ import pickle
 from glob import glob
 from sys import argv
 from os.path import splitext, exists
-from lmfit.models import LinearModel, GaussianModel
+from lmfit.models import LinearModel, ConstantModel, GaussianModel
 from scipy.signal import find_peaks
 
 # Resolution of the CAEN digitiser
 digi_res = 4 # ns
 qhist_bins = 200 # Numbe of bins to use when fitting and histing qint
-peak_guess = [0, 250, 500] # Guesses at where the ped, 1pe and 2pe peaks will be
+peak_guess = [0, 250, 500, 750] # Guesses at where the ped, 1pe and 2pe peaks will be
 
 def fit_wform(wform):
     """
@@ -87,34 +87,45 @@ def fit_qhist(qs):
 
     # Linear flat background, gaussians for each peak
     # Don't currently use BG as it reduces effectiveness at fitting 2pe peak
-    # mod_bg = LinearModel(prefix="bg_")
+    mod_bg = ConstantModel(prefix="bg_")
     mod_ped = GaussianModel(prefix="gped_")
     mod_1pe = GaussianModel(prefix="g1pe_")
     mod_2pe = GaussianModel(prefix="g2pe_")
+    mod_3pe = GaussianModel(prefix="g3pe_")
 
     # Combine all Gaussians for fit
-    model = mod_ped + mod_1pe + mod_2pe
+    model = mod_bg + mod_ped + mod_1pe + mod_2pe + mod_3pe
 
     # Pedestal should be highest peak
-    gped_amp_guess = max(qs_hist)
+    gped_amp_guess = 2*max(qs_hist)
     # For usual LED settings, subsequent peaks should be smaller
     # Halving is just a guess
     g1pe_amp_guess = gped_amp_guess/2
     g2pe_amp_guess = g1pe_amp_guess/2
+    g3pe_amp_guess = g2pe_amp_guess/2
 
-    params = model.make_params(
-        # bg_amplitude=0,
-        gped_center=peak_guess[0],
-        g1pe_center=peak_guess[1],
-        g2pe_center=peak_guess[2],
-        gped_amplitude=gped_amp_guess,
-        g1pe_amplitude=g1pe_amp_guess,
-        g2pe_amplitude=g2pe_amp_guess,
-        # These are again, general guesses
-        gped_sigma=10,
-        g1pe_sigma=100,
-        g2pe_sigma=100
-    )
+    model.set_param_hint("gped_center", value=peak_guess[0], min=-5, max=5)
+    model.set_param_hint("g1pe_center", value=peak_guess[1])
+    model.set_param_hint("g2pe_center", value=peak_guess[2])
+    model.set_param_hint("g3pe_center", value=peak_guess[3])
+    model.set_param_hint("gped_sigma", value=5)
+    model.set_param_hint("g1pe_sigma", value=50)
+    model.set_param_hint("g2pe_sigma", value=100)
+    model.set_param_hint("g3pe_sigma", value=200)
+    model.set_param_hint("bg_c", value=1e-5)
+    params = model.make_params()
+    # params = model.make_params(
+    #     gped_center=peak_guess[0],
+    #     g1pe_center=peak_guess[1],
+    #     g2pe_center=peak_guess[2],
+    #     gped_amplitude=gped_amp_guess,
+    #     g1pe_amplitude=g1pe_amp_guess,
+    #     g2pe_amplitude=g2pe_amp_guess,
+    #     # These are again, general guesses
+    #     gped_sigma=5,
+    #     g1pe_sigma=50,
+    #     g2pe_sigma=100
+    # )
 
     # Scale x to fit to real time values
     qfit = model.fit(qs_hist, params, x=qs_bincentres)
@@ -125,12 +136,17 @@ def fit_qhist(qs):
     qfit_fig, qfit_ax = plt.subplots()
     qfit_ax.bar(qs_bincentres, qs_hist, width=bin_width, label="Data", alpha=0.5)
     # qfit_ax.hist(qs, bins=qhist_bins, label="Data", alpha=0.5, density=True)
-    # qfit_ax.plot(qs_bincentres, qfit.init_fit, "--", c="grey", alpha=0.5)
+    qfit_ax.plot(qs_bincentres, qfit.init_fit, "--", c="grey", alpha=0.5)
     qfit_ax.plot(qs_bincentres, qfit.best_fit, label="Best Fit (Composite)")
     # Plot each component/submodel
     for name, sub_mod in components.items():
-        # Get rid of underscore on prefix for submod name
-        qfit_ax.plot(qs_bincentres, sub_mod, label=name[:-1])
+        try:
+            # Get rid of underscore on prefix for submod name
+            qfit_ax.plot(qs_bincentres, sub_mod, label=name[:-1])
+        except ValueError:
+            # For constant model, sub_mod isn't list
+            qfit_ax.hlines(y=sub_mod, xmin=qs_bincentres[0], xmax=qs_bincentres[-1], 
+                label=name[:-1])
     qfit_ax.legend()
 
     # Set lower limit to half a bin to avoid weird scaling
