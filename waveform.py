@@ -10,8 +10,7 @@ from lmfit.models import ConstantModel, GaussianModel
 
 # Resolution of the CAEN digitiser
 digi_res = 4 # ns
-qhist_bins = 200 # Numbe of bins to use when fitting and histing qint
-peak_guess = [0, 250, 500, 750] # Guesses at where the ped, 1pe and 2pe peaks will be
+qhist_bins = 400 # Numbe of bins to use when fitting and histing qint
 
 def fit_wform(wform):
     """
@@ -66,12 +65,17 @@ def find_peaks(qs):
 
     return
 
-def fit_qhist(qs):
+def fit_qhist(qs, npe=2, peak_spacing=250, peak_width=50):
     """
     Fits Gaussians to the integrated charge histogram, fitting the pedestal, 1pe
     and 2pe peaks. Bins within the function.
 
     :param list of int qs: The integrated charges from each individual waveform.
+    :param int npe: The number of pe peaks to fit (not including pedestal).
+    :param int or float peak_spacing: The guess at where the **1pe** peak will
+        be. Subsequent pe peak guesses will be spaced equally apart.
+    :param int or float peak_width: The guess at the sigma of the **1pe** peak.
+        Subsequent peaks will be doubled.
     """
     
     # Bin the integrated charges 
@@ -89,43 +93,31 @@ def fit_qhist(qs):
     # Don't currently use BG as it reduces effectiveness at fitting 2pe peak
     mod_bg = ConstantModel(prefix="bg_")
     mod_ped = GaussianModel(prefix="gped_")
-    mod_1pe = GaussianModel(prefix="g1pe_")
-    mod_2pe = GaussianModel(prefix="g2pe_")
-    mod_3pe = GaussianModel(prefix="g3pe_")
 
-    # Combine all Gaussians for fit
-    model = mod_bg + mod_ped + mod_1pe + mod_2pe + mod_3pe
+    # Guess based on given 1pe peak width. Very vague, used to define limits for
+    # the ped fit and stop it getting absorbed into 1pe for small peds.
+    ped_width = peak_width/4
 
-    # Pedestal should be highest peak
-    gped_amp_guess = 2*max(qs_hist)
-    # For usual LED settings, subsequent peaks should be smaller
-    # Halving is just a guess
-    g1pe_amp_guess = gped_amp_guess/2
-    g2pe_amp_guess = g1pe_amp_guess/2
-    g3pe_amp_guess = g2pe_amp_guess/2
-
-    model.set_param_hint("gped_center", value=peak_guess[0], min=-5, max=5)
-    model.set_param_hint("g1pe_center", value=peak_guess[1])
-    model.set_param_hint("g2pe_center", value=peak_guess[2])
-    model.set_param_hint("g3pe_center", value=peak_guess[3])
+    # Combine models
+    model = mod_bg + mod_ped
+    model.set_param_hint("bg_c", value=0)
+    model.set_param_hint("gped_center", value=0, min=-ped_width, max=ped_width)
     model.set_param_hint("gped_sigma", value=5)
-    model.set_param_hint("g1pe_sigma", value=50)
-    model.set_param_hint("g2pe_sigma", value=100)
-    model.set_param_hint("g3pe_sigma", value=200)
-    model.set_param_hint("bg_c", value=1e-5)
+
+    # Pedestal should be highest peak, but not necessarily if LED is too bright
+    gped_amp_guess = max(qs_hist)
+
+    # Iteratively add npe pe peaks to fit
+    for i in range(1,(npe+1)):
+        model += GaussianModel(prefix=f"g{i}pe_")
+        # Assume all peaks are equally spaced apart
+        model.set_param_hint(f"g{i}pe_center", value=i*peak_spacing)
+        # First peak has width of peak_width, subsequent peaks will double in
+        # width each time
+        model.set_param_hint(f"g{i}pe_sigma", value=peak_width*2**(i-1))
+
+    # Make the params of the model
     params = model.make_params()
-    # params = model.make_params(
-    #     gped_center=peak_guess[0],
-    #     g1pe_center=peak_guess[1],
-    #     g2pe_center=peak_guess[2],
-    #     gped_amplitude=gped_amp_guess,
-    #     g1pe_amplitude=g1pe_amp_guess,
-    #     g2pe_amplitude=g2pe_amp_guess,
-    #     # These are again, general guesses
-    #     gped_sigma=5,
-    #     g1pe_sigma=50,
-    #     g2pe_sigma=100
-    # )
 
     # Scale x to fit to real time values
     qfit = model.fit(qs_hist, params, x=qs_bincentres)
@@ -269,15 +261,22 @@ def qint_calcs(qfit, qs_bincentres, qs_hist):
 
     gped_center = qfit.best_values["gped_center"] # Or should this just be 0?
     g1pe_center = qfit.best_values["g1pe_center"]
-    g2pe_center = qfit.best_values["g2pe_center"]
 
     g1pe_amp = qfit.best_values["g1pe_amplitude"]
     g1pe_sig = qfit.best_values["g1pe_sigma"]
 
-    if g2pe_center < g1pe_center:
-        print("ISSUE WITH FIT")
-        print("2pe curve is centred BELOW 1pe.")
-        return
+    g1pe_sig = qfit.best_values["g1pe_sigma"]
+
+    two_peaks_fitted = "g2pe_center" in qfit.best_values
+
+    # If there's a 2pe peak fit, check if it fit correctly (i.e. it is after the
+    # 1pe peak)
+    if two_peaks_fitted:
+        g2pe_center = qfit.best_values["g2pe_center"]
+        if g2pe_center < g1pe_center:
+            print("ISSUE WITH FIT")
+            print("2pe curve is centred BELOW 1pe.")
+            return
 
     # Gain is just average integrated charge for 1pe vs none.
     gain = (g1pe_center - gped_center)/1.602e-19
@@ -295,7 +294,11 @@ def qint_calcs(qfit, qs_bincentres, qs_hist):
     # determination quality.
     # Find peak between the ped and 2pe centres (half the distance between them)
     qhist_1pe_peak_lo = (g1pe_center - gped_center)/2
-    qhist_1pe_peak_hi = (g2pe_center - g1pe_center)/2
+    # Use second peak if it's fitted, if not just half beyond the 1pe peak
+    if two_peaks_fitted:
+        qhist_1pe_peak_hi = (g2pe_center - g1pe_center)/2
+    else:
+        qhist_1pe_peak_hi = 1.5*g1pe_center
     qs_hist_1pe_peak_scan = [x for x in zip(qs_bincentres,qs_hist) 
         if x[0] > qhist_1pe_peak_lo and x[0] < qhist_1pe_peak_hi]
     h_p = max([x[1] for x in qs_hist_1pe_peak_scan])
