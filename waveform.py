@@ -2,11 +2,11 @@ import xml.etree.ElementTree as ET
 import matplotlib.pyplot as plt
 import numpy as np
 import pickle
+import scipy.signal
 from glob import glob
 from sys import argv
 from os.path import splitext, exists
-from lmfit.models import LinearModel, ConstantModel, GaussianModel
-from scipy.signal import find_peaks
+from lmfit.models import ConstantModel, GaussianModel
 
 # Resolution of the CAEN digitiser
 digi_res = 4 # ns
@@ -19,7 +19,7 @@ def fit_wform(wform):
 
     :param np.array wform: Numpy array of the waveform to fit.
     """
-    mod_bg = LinearModel(prefix="lin_")
+    mod_bg = ConstantModel(prefix="bg_")
     mod_peak = GaussianModel(prefix="g1_")
 
     model = mod_bg + mod_peak
@@ -29,7 +29,7 @@ def fit_wform(wform):
 
     try:
         params = model.make_params(g1_amplitude=-20, g1_center=g1_center, 
-            g1_sigma=2, lin_amplitude=120)
+            g1_sigma=2, bg_amplitude=120)
     except:
         print("!!Issue setting wform fit model params!!")
         params = model.make_params()
@@ -57,7 +57,7 @@ def find_peaks(qs):
     plt.bar(qs_hist[1][:-1],qs_hist[0],width=bin_width)
     plt.yscale("log")
 
-    peaks = find_peaks(qs_hist[0])[0]
+    peaks = scipy.signal.find_peaks(qs_hist[0])[0]
     print("%i peak(s) found with indices: " % len(peaks), end="")
     print(peaks)
 
@@ -136,7 +136,7 @@ def fit_qhist(qs):
     qfit_fig, qfit_ax = plt.subplots()
     qfit_ax.bar(qs_bincentres, qs_hist, width=bin_width, label="Data", alpha=0.5)
     # qfit_ax.hist(qs, bins=qhist_bins, label="Data", alpha=0.5, density=True)
-    qfit_ax.plot(qs_bincentres, qfit.init_fit, "--", c="grey", alpha=0.5)
+    # qfit_ax.plot(qs_bincentres, qfit.init_fit, "--", c="grey", alpha=0.5)
     qfit_ax.plot(qs_bincentres, qfit.best_fit, label="Best Fit (Composite)")
     # Plot each component/submodel
     for name, sub_mod in components.items():
