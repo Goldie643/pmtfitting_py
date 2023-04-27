@@ -145,7 +145,8 @@ def fit_qhist(qs):
             qfit_ax.plot(qs_bincentres, sub_mod, label=name[:-1])
         except ValueError:
             # For constant model, sub_mod isn't list
-            qfit_ax.hlines(y=sub_mod, xmin=qs_bincentres[0], xmax=qs_bincentres[-1], 
+            # Don't use hlines, use plot to keep colours in order
+            qfit_ax.plot([qs_bincentres[0],qs_bincentres[-1]], [sub_mod]*2, 
                 label=name[:-1])
     qfit_ax.legend()
 
