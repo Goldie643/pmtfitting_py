@@ -257,6 +257,57 @@ def process_wforms(fname):
 
     return qs, wform_avg
 
+def qint_calcs(qfit, qs_bincentres, qs_hist):
+    """
+    Calculates gain, peak-to-valley ratio and PE resolution from the
+    integrated charge fit.
+
+    :param lmfit.model.ModelResult qfit: The fit of the integrated charge histo.
+    :param list or array of floats qs_bincentres: The centres of the qhist bins.
+    :param list or array of floats qs_hist: The values of the qhist bins.
+    """
+
+    gped_center = qfit.best_values["gped_center"] # Or should this just be 0?
+    g1pe_center = qfit.best_values["g1pe_center"]
+    g2pe_center = qfit.best_values["g2pe_center"]
+
+    g1pe_amp = qfit.best_values["g1pe_amplitude"]
+    g1pe_sig = qfit.best_values["g1pe_sigma"]
+
+    if g2pe_center < g1pe_center:
+        print("ISSUE WITH FIT")
+        print("2pe curve is centred BELOW 1pe.")
+        return
+
+    # Gain is just average integrated charge for 1pe vs none.
+    gain = (g1pe_center - gped_center)/1.602e-19
+    print(f"Gain = {gain:g}")
+
+    # Peak-to-valley is ratio of 1pe peak to valley between 1pe and pedestal. 
+    # Get valley from minimum of qs_hist between the two peaks
+    # Subset qs_hist using qs_bincentres
+    qs_hist_pedto1pe = [x for x in zip(qs_bincentres,qs_hist) 
+        if x[0] > gped_center and x[0] < g1pe_center]
+    # Get min from this subset
+    h_v = min([x[1] for x in qs_hist_pedto1pe])
+    
+    # Don't want to use the actual gaussian amplitude here as this is for peak
+    # determination quality.
+    # Find peak between the ped and 2pe centres (half the distance between them)
+    qhist_1pe_peak_lo = (g1pe_center - gped_center)/2
+    qhist_1pe_peak_hi = (g2pe_center - g1pe_center)/2
+    qs_hist_1pe_peak_scan = [x for x in zip(qs_bincentres,qs_hist) 
+        if x[0] > qhist_1pe_peak_lo and x[0] < qhist_1pe_peak_hi]
+    h_p = max([x[1] for x in qs_hist_1pe_peak_scan])
+    pv_r = h_p/h_v
+    print(f"Peak-to-valley ratio = {pv_r:g}")
+
+    # PE resolution I *think* uses the actual fit gaussian
+    pe_res = g1pe_sig/g1pe_amp
+    print(f"PE Resolution = {pe_res:g}")
+
+    return gain, pv_r, pe_res
+
 def main():
     # Use glob to expand wildcards
     fnames = []
@@ -274,6 +325,9 @@ def main():
         # Fit the integrated charge histo
         qfit, qs_hist, qs_bincentres, bin_width, qfit_ax, qfit_fig = fit_qhist(qs)
         qfit_ax.set_title(fname)
+
+        # Get calcs from qhist
+        qint_calcs(qfit, qs_bincentres, qs_hist)
 
         # Plot integrated charges using the histogram info given by fit_qhist()
         qint_ax.bar(qs_bincentres, qs_hist, width=bin_width, alpha=0.5)
