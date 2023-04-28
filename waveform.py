@@ -353,9 +353,19 @@ def main():
         # Now plot average wform
         # Scale xs to match resolution
         xs = [digi_res*x for x in range(len(wform_avg))]
-        wform_ax.scatter(xs, wform_avg, marker="+")
+        
+        # Get the fit of the waveform
         wform_fit = fit_wform(wform_avg)
-        wform_ax.plot(xs, wform_fit.best_fit, label=fname)
+        wform_fit_components = wform_fit.eval_components()
+
+        # Offset by the fit BG ConstantModel
+        offset_fit = [y-wform_fit_components["bg_"] for y in wform_fit.best_fit]
+        offset_data = [y-wform_fit_components["bg_"] for y in wform_avg]
+
+        # wform_ax.scatter(xs, offset_data, marker="+")
+        wform_ax.plot(xs, offset_data, label=fname)
+        # wform_ax.plot(xs, wform_fit.best_fit, label=fname)
+        # wform_ax.plot(xs, offset_fit, label=fname)
 
     qint_ax.legend()
     qint_ax.set_yscale("log")
