@@ -288,7 +288,12 @@ def qint_calcs(qfit, qs_bincentres, qs_hist):
     qs_hist_pedto1pe = [x for x in zip(qs_bincentres,qs_hist) 
         if x[0] > gped_center and x[0] < g1pe_center]
     # Get min from this subset
-    h_v = min([x[1] for x in qs_hist_pedto1pe])
+    if len(qs_hist_pedto1pe) == 0:
+        print("Failed to calculate valley height!"
+            " No data between ped and 1pe peak, maybe 1pe failed to fit?")
+        h_v = None
+    else:
+        h_v = min([x[1] for x in qs_hist_pedto1pe])
     
     # Don't want to use the actual gaussian amplitude here as this is for peak
     # determination quality.
@@ -301,9 +306,18 @@ def qint_calcs(qfit, qs_bincentres, qs_hist):
         qhist_1pe_peak_hi = 1.5*g1pe_center
     qs_hist_1pe_peak_scan = [x for x in zip(qs_bincentres,qs_hist) 
         if x[0] > qhist_1pe_peak_lo and x[0] < qhist_1pe_peak_hi]
-    h_p = max([x[1] for x in qs_hist_1pe_peak_scan])
-    pv_r = h_p/h_v
-    print(f"Peak-to-valley ratio = {pv_r:g}")
+    if len(qs_hist_1pe_peak_scan) == 0:
+        print("Failed to calculate peak height!"
+            " No data around 1pe peak, maybe 1pe failed to fit?")
+        h_p = None
+    else:
+        h_p = max([x[1] for x in qs_hist_1pe_peak_scan])
+
+    if h_p is not None and h_v is not None:
+        pv_r = h_p/h_v
+        print(f"Peak-to-valley ratio = {pv_r:g}")
+    else:
+        pv_r = None
 
     # PE resolution I *think* uses the actual fit gaussian
     pe_res = g1pe_sig/g1pe_amp
