@@ -172,6 +172,10 @@ def quick_qint(wform):
     # TODO: Deal with afterpulses
     # Get baseline from average of all points outside window
     non_peak = np.append(wform[:peak_i-win_pre], wform[peak_i+win_post:])
+    # Truncated mean, only use the middle 50% of values.
+    non_peak.sort()
+    non_peak_lim = int(len(non_peak)/4)
+    non_peak = non_peak[non_peak_lim:-non_peak_lim]
     baseline = sum(non_peak)/len(non_peak)
 
     # plt.clf()
