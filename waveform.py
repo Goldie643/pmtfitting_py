@@ -156,23 +156,34 @@ def quick_qint(wform):
 
     :param np.array wform: Numpy array of the waveform to fit.
     """
+    # The upper limit of the search region
+    # Peaks are set to be early in the window
+    search_region_lim = int(len(wform)/4)
     # Take the argmin as the peak
-    peak_i = np.argmin(wform)
+    peak_i = np.argmin(wform[:search_region_lim])
 
-    # Halfsize of window in indices (NOT time)
-    win_halfsize = 5
+    # N bins pre/post the peak to calculate the integral from
+    win_pre = 3
+    win_post = 7
 
     # Define window around centre as peak, size determined by eye.
-    peak_wform = wform[(peak_i-win_halfsize):(peak_i+win_halfsize)]
+    peak_wform = wform[(peak_i-win_pre):(peak_i+win_post)]
 
     # TODO: Deal with afterpulses
     # Get baseline from average of all points outside window
-    non_peak = np.append(wform[:peak_i-win_halfsize], wform[:peak_i+win_halfsize])
+    non_peak = np.append(wform[:peak_i-win_pre], wform[peak_i+win_post:])
     baseline = sum(non_peak)/len(non_peak)
+
+    # plt.clf()
+    # plt.plot(range(len(wform)), wform)
+    # plt.plot(range(peak_i-win_pre,peak_i+win_post), peak_wform)
+    # plt.plot([0,len(wform)], [baseline,baseline], c="grey", linestyle="--")
+    # plt.show()
 
     # Integrate Q from within window, considering baseline
     # Effectively flip, offset to 0, integrate
-    peak_wform_mod = [baseline-x for x in peak_wform]
+    # Don't contribute negative charge to the integral.
+    peak_wform_mod = [max(0,baseline-x) for x in peak_wform]
     qint = sum(peak_wform_mod)*digi_res
 
     return qint
