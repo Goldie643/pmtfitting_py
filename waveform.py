@@ -65,7 +65,7 @@ def find_peaks(qs):
 
     return
 
-def fit_qhist(qs, npe=2, peak_spacing=250, peak_width=50):
+def fit_qhist(qs, npe=1, peak_spacing=250, peak_width=50):
     """
     Fits Gaussians to the integrated charge histogram, fitting the pedestal, 1pe
     and 2pe peaks. Bins within the function.
@@ -187,7 +187,7 @@ def quick_qint(wform):
     # Integrate Q from within window, considering baseline
     # Effectively flip, offset to 0, integrate
     # Don't contribute negative charge to the integral.
-    peak_wform_mod = [max(0,baseline-x) for x in peak_wform]
+    peak_wform_mod = [baseline-x for x in peak_wform]
     qint = sum(peak_wform_mod)*digi_res
 
     return qint
