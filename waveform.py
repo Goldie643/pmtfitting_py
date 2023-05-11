@@ -86,6 +86,18 @@ def fit_qhist(qs, npe=1, peak_spacing=250, peak_width=50):
     # Includes all edges, get rid of last edge
     qs_bincentres = qs_binedges[:-1] + (bin_width/2)
 
+    # Get rid of tiny bins by removing bins with less than qs_cut_thresh in
+    qs_bincentres_cut = []
+    qs_hist_cut = []
+    qs_cut_thresh = max(qs_hist)/1e4
+    for bincent, q in zip(qs_bincentres, qs_hist):
+        if q > qs_cut_thresh:
+            qs_bincentres_cut.append(bincent)
+            qs_hist_cut.append(q)
+
+    qs_hist = [x for x in qs_hist_cut]
+    qs_bincentres = [x for x in qs_bincentres_cut]
+
     # Scale bin values to area normalise to 1
     qs_hist = qs_hist/(sum(qs_hist)*bin_width)
 
