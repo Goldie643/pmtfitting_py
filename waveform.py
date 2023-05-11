@@ -26,12 +26,22 @@ def fit_wform(wform):
     # Guess the center as the global minimum, scaled by digitiser res
     g1_center = digi_res*np.argmin(wform)
 
-    try:
-        params = model.make_params(g1_amplitude=-20, g1_center=g1_center, 
-            g1_sigma=2, bg_amplitude=120)
-    except:
-        print("!!Issue setting wform fit model params!!")
-        params = model.make_params()
+    # Very basic guess of amplitude as average
+    bg_amplitude = sum(wform)/len(wform)
+
+    model.set_param_hint("g1_center", value=g1_center)
+    model.set_param_hint("g1_amplitude", value=-5, min=-1)
+    model.set_param_hint("g1_sigma", value=5)
+    model.set_param_hint("bg_amplitude", value=bg_amplitude)
+
+    params = model.make_params()
+
+    # try:
+    #     params = model.make_params(g1_amplitude=-5, g1_center=g1_center, 
+    #         g1_sigma=2, bg_amplitude=3600)
+    # except:
+    #     print("!!Issue setting wform fit model params!!")
+    #     params = model.make_params()
 
     # Scale x to fit to real time values
     xs = [digi_res*x for x in range(len(wform))]
@@ -65,7 +75,7 @@ def find_peaks(qs):
 
     return
 
-def fit_qhist(qs, npe=1, peak_spacing=250, peak_width=50):
+def fit_qhist(qs, npe=2, peak_spacing=250, peak_width=50):
     """
     Fits Gaussians to the integrated charge histogram, fitting the pedestal, 1pe
     and 2pe peaks. Bins within the function.
