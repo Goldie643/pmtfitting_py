@@ -75,7 +75,7 @@ def find_peaks(qs):
 
     return
 
-def fit_qhist(qs, npe=2, peak_spacing=250, peak_width=50):
+def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=100):
     """
     Fits Gaussians to the integrated charge histogram, fitting the pedestal, 1pe
     and 2pe peaks. Bins within the function.
@@ -120,23 +120,33 @@ def fit_qhist(qs, npe=2, peak_spacing=250, peak_width=50):
     # the ped fit and stop it getting absorbed into 1pe for small peds.
     ped_width = peak_width/4
 
-    # Combine models
-    model = mod_bg + mod_ped
-    model.set_param_hint("bg_c", value=0)
-    model.set_param_hint("gped_center", value=0, min=-ped_width, max=ped_width)
-    model.set_param_hint("gped_sigma", value=5)
-
     # Pedestal should be highest peak, but not necessarily if LED is too bright
     gped_amp_guess = max(qs_hist)
+
+    # For some reason initial fit seems to be lower than it should be, scale it
+    # up a bit to make it fit nicer initially
+    scale = 15
+
+    # Combine models
+    model = mod_bg + mod_ped
+    # model = mod_ped
+    # model.set_param_hint("bg_c", value=0, max=gped_amp_guess/1e3)
+    model.set_param_hint("gped_center", value=0, min=-ped_width, max=ped_width)
+    model.set_param_hint("gped_sigma", value=ped_width)
+    model.set_param_hint("gped_amplitude", value=scale*gped_amp_guess)
 
     # Iteratively add npe pe peaks to fit
     for i in range(1,(npe+1)):
         model += GaussianModel(prefix=f"g{i}pe_")
+        center = i*peak_spacing
         # Assume all peaks are equally spaced apart
-        model.set_param_hint(f"g{i}pe_center", value=i*peak_spacing)
+        model.set_param_hint(f"g{i}pe_center", value=center, min=0.9*center, 
+            max=1.1*center)
         # First peak has width of peak_width, subsequent peaks will double in
         # width each time
-        model.set_param_hint(f"g{i}pe_sigma", value=peak_width*2**(i-1))
+        model.set_param_hint(f"g{i}pe_sigma", value=peak_width*(2**(i-1)),
+            min=0.75*peak_width, max=1.5*peak_width)
+        model.set_param_hint(f"g{i}pe_amplitude", value=scale*gped_amp_guess/(10**i))
 
     # Make the params of the model
     params = model.make_params()
@@ -166,7 +176,7 @@ def fit_qhist(qs, npe=2, peak_spacing=250, peak_width=50):
 
     # Set lower limit to half a bin to avoid weird scaling
     # Remembering it's area normalised
-    qfit_ax.set_ylim(bottom=0.5/len(qs))
+    qfit_ax.set_ylim(bottom=0.1/len(qs))
     qfit_ax.set_yscale("log")
 
     return qfit, qs_hist, qs_bincentres, bin_width, qfit_ax, qfit_fig
