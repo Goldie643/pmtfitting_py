@@ -145,20 +145,17 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=20):
         width = peak_width*(2**i)
 
         if i < len(peaks):
-            print("Peak Found")
             # If this peak was found, use them as starting guesses
             center = peaks[i]
             height = qs_hist[peaks_i[i]]
 
             # Use spacing if on at least 1pe peak
             if i > 0:
-                print("Not ped")
                 spacing = peaks[i] - peaks[i-1]
                 width = spacing/4
-        elif (len(peaks) > 1):
-            print("No Peak Found")
-            # TODO: ISSUE, THIS ASSUMES ITS ONLY ONE BEYOND PEAKS
-            # Predict center using previous peak spacing
+        elif (len(peaks) > 1) and (i == len(peaks)):
+            # If the peak to fit is one beyond the peaks found,
+            # predict center using previous peak spacing
             prev_spacing = peaks[i-1] - peaks[i-2]
             center = peaks[i-1] + prev_spacing
 
@@ -170,6 +167,8 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=20):
             width = prev_spacing/2
         else:
             # Otherwise, just use the peak_spacing
+            # TODO: use peak spacing from peak finder for these too, if
+            # available
             center = i*peak_spacing
 
             # Old method, predict based off of pedestal, not consistent
