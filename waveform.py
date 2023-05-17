@@ -10,7 +10,7 @@ from lmfit.models import ConstantModel, GaussianModel
 
 # Resolution of the CAEN digitiser
 digi_res = 4 # ns
-qhist_bins = 400 # Numbe of bins to use when fitting and histing qint
+qhist_bins = 500 # Number of bins to use when fitting and histing qint
 
 def fit_wform(wform):
     """
@@ -88,9 +88,12 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=20):
     :param int or float peak_width: The guess at the sigma of the **1pe** peak.
         Subsequent peaks will be doubled.
     """
+
+    # Get rid of qs where calculation is perfectly 0 for some reason
+    qs_filter = [q for q in qs if q != 0]
     
     # Bin the integrated charges 
-    qs_hist, qs_binedges = np.histogram(qs, bins=qhist_bins)
+    qs_hist, qs_binedges = np.histogram(qs_filter, bins=qhist_bins)
 
     # Get centre of bins instead of edges
     bin_width = qs_binedges[1]-qs_binedges[0]
@@ -119,7 +122,7 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=20):
 
     # For some reason initial fit seems to be lower than it should be, scale it
     # up a bit to make it fit nicer initially
-    scale = 20
+    scale = 30
 
     # Combine models
     model = mod_bg
@@ -179,11 +182,17 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=20):
             # converting peak_spacing into index spacing
             height = qs_hist[int(i*peak_spacing/bin_width)]
 
-        # Scale to get to reasonable level
-        height = height*scale
+        # Scale the amplitude to make the initial fit a bit nicer
+        # height *= (i+1)*scale
+        # height *= 5**(i+1)
+        height *= scale*(i+1)
+
+        print(height)
 
         model.set_param_hint(f"g{i}pe_center", value=center, min=0.9*center, 
             max=1.1*center)
+
+        # Hinting at height, not amplitude, doesn't work accurately for some reason
         model.set_param_hint(f"g{i}pe_amplitude", value=height)
 
         model.set_param_hint(f"g{i}pe_sigma", value=width, min=0.75*width,
@@ -214,7 +223,7 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=20):
 
     qfit_ax.plot(qs_bincentres, qfit.init_fit, "--", c="grey", alpha=0.5, 
         label="Initial Fit")
-    qfit_ax.vlines(peaks, 0, max(qs), colors="grey", linestyles="--", alpha=0.5)
+    qfit_ax.vlines(peaks, 0, max(qs_hist), colors="grey", linestyles="--", alpha=0.5)
 
     qfit_ax.legend()
 
