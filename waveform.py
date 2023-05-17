@@ -75,7 +75,7 @@ def find_peaks(qs, distance=200):
 
     return
 
-def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=100):
+def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=20):
     """
     Fits Gaussians to the integrated charge histogram, fitting the pedestal, 1pe
     and 2pe peaks. Bins within the function.
@@ -115,65 +115,63 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=100):
     # Linear flat background, gaussians for each peak
     # Don't currently use BG as it reduces effectiveness at fitting 2pe peak
     mod_bg = ConstantModel(prefix="bg_")
-    mod_ped = GaussianModel(prefix="gped_")
-
-    # Guess based on given 1pe peak width. Very vague, used to define limits for
-    # the ped fit and stop it getting absorbed into 1pe for small peds.
-    ped_width = peak_width/4
-
-    # Pedestal should be highest peak, but not necessarily if LED is too bright
-    gped_amp_guess = max(qs_hist)
 
     # For some reason initial fit seems to be lower than it should be, scale it
     # up a bit to make it fit nicer initially
-    scale = 15
+    scale = 20
 
     # Combine models
-    model = mod_bg + mod_ped
-    # model = mod_ped
-    # model.set_param_hint("bg_c", value=0, max=gped_amp_guess/1e3)
-    model.set_param_hint("gped_center", value=0, min=-ped_width, max=ped_width)
-    model.set_param_hint("gped_sigma", value=ped_width)
-    model.set_param_hint("gped_amplitude", value=scale*gped_amp_guess)
+    model = mod_bg
 
     # Find peaks, with fairly stringent prominence requirement
     peaks_i = scipy.signal.find_peaks(qs_hist, 
-        prominence=max(qs_hist)/100)[0]
+        prominence=max(qs_hist)/1000)[0]
 
     # Get actual peak positions instead of just indices
     peaks = [x*bin_width+qs_bincentres[0] for x in peaks_i]
-
-    # Set number of pe to number of peaks fit
-    npe = len(peaks)-1
 
     # TODO: instead, fit as many as npe, using spacing between previous peaks to
     # estimate position of next ones
 
     # Iteratively add npe pe peaks to fit
-    for i in range(1,(npe+1)):
+    for i in range(npe+1):
         model += GaussianModel(prefix=f"g{i}pe_")
 
-        # center = i*peak_spacing
-        # # Assume all peaks are equally spaced apart
-        # model.set_param_hint(f"g{i}pe_center", value=center, min=0.9*center, 
-        #     max=1.1*center)
-        # # First peak has width of peak_width, subsequent peaks will double in
-        # # width each time
-        # model.set_param_hint(f"g{i}pe_sigma", value=peak_width*(2**(i-1)),
-        #     min=0.75*peak_width, max=1.5*peak_width)
-        # model.set_param_hint(f"g{i}pe_amplitude", value=scale*gped_amp_guess/(10**i))
+        if i < len(peaks):
+            # If this peak was found, use them as starting guesses
+            center = peaks[i]
+            height = qs_hist[peaks_i[i]]
+        elif (len(peaks) > 1):
+            # Predict center using previous peak spacing
+            prev_spacing = peaks[i-1] - peaks[i-2]
+            center = peaks[i-1] + prev_spacing
 
-        center = peaks[i]
-        print(center)
+            # Get height by getting the index, again from prev spacing
+            prev_spacing_i = peaks_i[i-1] - peaks_i[i-2]
+            height = qs_hist[peaks_i[i-1] + prev_spacing_i]
+        else:
+            # Otherwise, just use the peak_spacing
+            center = i*peak_spacing
+
+            # Old method, predict based off of pedestal, not consistent
+            # height = max(qs_hist)/(10**i)
+
+            # Just take the height at the centre guess, get index from
+            # converting peak_spacing into index spacing
+            height = qs_hist[int(i*peak_spacing/bin_width)]
+
+        # Scale to get to reasonable level
+        height = height*scale
+
         model.set_param_hint(f"g{i}pe_center", value=center, min=0.9*center, 
             max=1.1*center)
+        model.set_param_hint(f"g{i}pe_amplitude", value=height)
 
-        height = qs_hist[peaks_i[i]]
         # First peak has width of peak_width, subsequent peaks will double in
         # width each time
-        model.set_param_hint(f"g{i}pe_amplitude", value=height)
-        model.set_param_hint(f"g{i}pe_sigma", value=peak_width*(2**(i-1)),
-            min=0.75*peak_width, max=1.5*peak_width)
+        width = peak_width*(2**i)
+        model.set_param_hint(f"g{i}pe_sigma", value=width, min=0.75*width,
+            max=1.5*width)
 
     # Make the params of the model
     params = model.make_params()
@@ -186,8 +184,6 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=100):
 
     qfit_fig, qfit_ax = plt.subplots()
     qfit_ax.bar(qs_bincentres, qs_hist, width=bin_width, label="Data", alpha=0.5)
-    # qfit_ax.hist(qs, bins=qhist_bins, label="Data", alpha=0.5, density=True)
-    qfit_ax.plot(qs_bincentres, qfit.init_fit, "--", c="grey", alpha=0.5)
     qfit_ax.plot(qs_bincentres, qfit.best_fit, label="Best Fit (Composite)")
     # Plot each component/submodel
     for name, sub_mod in components.items():
@@ -199,7 +195,10 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=100):
             # Don't use hlines, use plot to keep colours in order
             qfit_ax.plot([qs_bincentres[0],qs_bincentres[-1]], [sub_mod]*2, 
                 label=name[:-1])
-    qfit_ax.vlines(peaks, 0, max(qs), colors="r")
+
+    qfit_ax.plot(qs_bincentres, qfit.init_fit, "--", c="grey", alpha=0.5, 
+        label="Initial Fit")
+    qfit_ax.vlines(peaks, 0, max(qs), colors="grey", linestyles="--", alpha=0.5)
 
     qfit_ax.legend()
 
@@ -335,7 +334,7 @@ def qint_calcs(qfit, qs_bincentres, qs_hist):
     :param list or array of floats qs_hist: The values of the qhist bins.
     """
 
-    gped_center = qfit.best_values["gped_center"] # Or should this just be 0?
+    gped_center = qfit.best_values["g0pe_center"] # Or should this just be 0?
     g1pe_center = qfit.best_values["g1pe_center"]
 
     g1pe_amp = qfit.best_values["g1pe_amplitude"]
