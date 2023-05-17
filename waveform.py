@@ -51,31 +51,6 @@ def fit_wform(wform):
 
     return result
 
-# No longer used, done within fit_qhist()
-def find_peaks(qs, distance=200):
-    """
-    Finds peaks using scipy.signal.find_peaks, in the integrated charge
-    histogram. Doesn't work very well.
-
-    :param list of int qs: The integrated charges from each individual waveform.
-    """
-
-    qs_hist = np.histogram(qs, bins=qhist_bins)
-    print(qs_hist)
-
-    bin_width = qs_hist[1][1] - qs_hist[1][0]
-    plt.bar(qs_hist[1][:-1],qs_hist[0],width=bin_width)
-    plt.yscale("log")
-
-    peaks = scipy.signal.find_peaks(qs_hist[0], prominence=max(qs)/10)[0]
-    print("%i peak(s) found with indices: " % len(peaks), end="")
-    print(peaks)
-
-    plt.vlines([peak*bin_width for peak in peaks], 0, max(qs), colors="r")
-    plt.show()
-
-    return
-
 def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=20):
     """
     Fits Gaussians to the integrated charge histogram, fitting the pedestal, 1pe
@@ -186,8 +161,6 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=20):
         # height *= (i+1)*scale
         # height *= 5**(i+1)
         height *= scale*(i+1)
-
-        print(height)
 
         model.set_param_hint(f"g{i}pe_center", value=center, min=0.9*center, 
             max=1.1*center)
