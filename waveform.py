@@ -51,7 +51,7 @@ def fit_wform(wform):
 
     return result
 
-def find_peaks(qs):
+def find_peaks(qs, distance=200):
     """
     Finds peaks using scipy.signal.find_peaks, in the integrated charge
     histogram. Doesn't work very well.
@@ -66,11 +66,11 @@ def find_peaks(qs):
     plt.bar(qs_hist[1][:-1],qs_hist[0],width=bin_width)
     plt.yscale("log")
 
-    peaks = scipy.signal.find_peaks(qs_hist[0])[0]
+    peaks = scipy.signal.find_peaks(qs_hist[0], prominence=max(qs)/10)[0]
     print("%i peak(s) found with indices: " % len(peaks), end="")
     print(peaks)
 
-    plt.vlines([peak*bin_width for peak in peaks],0,1e5)
+    plt.vlines([peak*bin_width for peak in peaks], 0, max(qs), colors="r")
     plt.show()
 
     return
@@ -90,6 +90,7 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=100):
     
     # Bin the integrated charges 
     qs_hist, qs_binedges = np.histogram(qs, bins=qhist_bins)
+
     # Get centre of bins instead of edges
     bin_width = qs_binedges[1]-qs_binedges[0]
 
@@ -135,18 +136,44 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=100):
     model.set_param_hint("gped_sigma", value=ped_width)
     model.set_param_hint("gped_amplitude", value=scale*gped_amp_guess)
 
+    # Find peaks, with fairly stringent prominence requirement
+    peaks_i = scipy.signal.find_peaks(qs_hist, 
+        prominence=max(qs_hist)/100)[0]
+
+    # Get actual peak positions instead of just indices
+    peaks = [x*bin_width+qs_bincentres[0] for x in peaks_i]
+
+    # Set number of pe to number of peaks fit
+    npe = len(peaks)-1
+
+    # TODO: instead, fit as many as npe, using spacing between previous peaks to
+    # estimate position of next ones
+
     # Iteratively add npe pe peaks to fit
     for i in range(1,(npe+1)):
         model += GaussianModel(prefix=f"g{i}pe_")
-        center = i*peak_spacing
-        # Assume all peaks are equally spaced apart
+
+        # center = i*peak_spacing
+        # # Assume all peaks are equally spaced apart
+        # model.set_param_hint(f"g{i}pe_center", value=center, min=0.9*center, 
+        #     max=1.1*center)
+        # # First peak has width of peak_width, subsequent peaks will double in
+        # # width each time
+        # model.set_param_hint(f"g{i}pe_sigma", value=peak_width*(2**(i-1)),
+        #     min=0.75*peak_width, max=1.5*peak_width)
+        # model.set_param_hint(f"g{i}pe_amplitude", value=scale*gped_amp_guess/(10**i))
+
+        center = peaks[i]
+        print(center)
         model.set_param_hint(f"g{i}pe_center", value=center, min=0.9*center, 
             max=1.1*center)
+
+        height = qs_hist[peaks_i[i]]
         # First peak has width of peak_width, subsequent peaks will double in
         # width each time
+        model.set_param_hint(f"g{i}pe_amplitude", value=height)
         model.set_param_hint(f"g{i}pe_sigma", value=peak_width*(2**(i-1)),
             min=0.75*peak_width, max=1.5*peak_width)
-        model.set_param_hint(f"g{i}pe_amplitude", value=scale*gped_amp_guess/(10**i))
 
     # Make the params of the model
     params = model.make_params()
@@ -160,7 +187,7 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=100):
     qfit_fig, qfit_ax = plt.subplots()
     qfit_ax.bar(qs_bincentres, qs_hist, width=bin_width, label="Data", alpha=0.5)
     # qfit_ax.hist(qs, bins=qhist_bins, label="Data", alpha=0.5, density=True)
-    # qfit_ax.plot(qs_bincentres, qfit.init_fit, "--", c="grey", alpha=0.5)
+    qfit_ax.plot(qs_bincentres, qfit.init_fit, "--", c="grey", alpha=0.5)
     qfit_ax.plot(qs_bincentres, qfit.best_fit, label="Best Fit (Composite)")
     # Plot each component/submodel
     for name, sub_mod in components.items():
@@ -172,6 +199,8 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=100):
             # Don't use hlines, use plot to keep colours in order
             qfit_ax.plot([qs_bincentres[0],qs_bincentres[-1]], [sub_mod]*2, 
                 label=name[:-1])
+    qfit_ax.vlines(peaks, 0, max(qs), colors="r")
+
     qfit_ax.legend()
 
     # Set lower limit to half a bin to avoid weird scaling
