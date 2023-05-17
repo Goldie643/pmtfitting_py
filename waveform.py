@@ -123,6 +123,8 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=20):
     # Combine models
     model = mod_bg
 
+    model.set_param_hint("bg_c", value=0, max=max(qs_hist)/1e4)
+
     # Find peaks, with fairly stringent prominence requirement
     peaks_i = scipy.signal.find_peaks(qs_hist, 
         prominence=max(qs_hist)/1000)[0]
@@ -137,11 +139,25 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=20):
     for i in range(npe+1):
         model += GaussianModel(prefix=f"g{i}pe_")
 
+        # First peak has width of peak_width, subsequent peaks will double in
+        # width each time.
+        # Will be overidden if peaks were found.
+        width = peak_width*(2**i)
+
         if i < len(peaks):
+            print("Peak Found")
             # If this peak was found, use them as starting guesses
             center = peaks[i]
             height = qs_hist[peaks_i[i]]
+
+            # Use spacing if on at least 1pe peak
+            if i > 0:
+                print("Not ped")
+                spacing = peaks[i] - peaks[i-1]
+                width = spacing/4
         elif (len(peaks) > 1):
+            print("No Peak Found")
+            # TODO: ISSUE, THIS ASSUMES ITS ONLY ONE BEYOND PEAKS
             # Predict center using previous peak spacing
             prev_spacing = peaks[i-1] - peaks[i-2]
             center = peaks[i-1] + prev_spacing
@@ -149,6 +165,9 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=20):
             # Get height by getting the index, again from prev spacing
             prev_spacing_i = peaks_i[i-1] - peaks_i[i-2]
             height = qs_hist[peaks_i[i-1] + prev_spacing_i]
+
+            # Assume width is double the previous peak spacing
+            width = prev_spacing/2
         else:
             # Otherwise, just use the peak_spacing
             center = i*peak_spacing
@@ -160,6 +179,8 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=20):
             # converting peak_spacing into index spacing
             height = qs_hist[int(i*peak_spacing/bin_width)]
 
+        print(width)
+
         # Scale to get to reasonable level
         height = height*scale
 
@@ -167,9 +188,6 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=20):
             max=1.1*center)
         model.set_param_hint(f"g{i}pe_amplitude", value=height)
 
-        # First peak has width of peak_width, subsequent peaks will double in
-        # width each time
-        width = peak_width*(2**i)
         model.set_param_hint(f"g{i}pe_sigma", value=width, min=0.75*width,
             max=1.5*width)
 
