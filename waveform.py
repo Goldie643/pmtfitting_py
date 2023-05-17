@@ -51,6 +51,7 @@ def fit_wform(wform):
 
     return result
 
+# No longer used, done within fit_qhist()
 def find_peaks(qs, distance=200):
     """
     Finds peaks using scipy.signal.find_peaks, in the integrated charge
@@ -178,8 +179,6 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=20):
             # converting peak_spacing into index spacing
             height = qs_hist[int(i*peak_spacing/bin_width)]
 
-        print(width)
-
         # Scale to get to reasonable level
         height = height*scale
 
@@ -224,7 +223,7 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=20):
     qfit_ax.set_ylim(bottom=0.1/len(qs))
     qfit_ax.set_yscale("log")
 
-    return qfit, qs_hist, qs_bincentres, bin_width, qfit_ax, qfit_fig
+    return qfit, qs_hist, qs_bincentres, peaks_i, qfit_ax
 
 def quick_qint(wform):
     """
@@ -341,7 +340,7 @@ def process_wforms(fname):
 
     return qs, wform_avg
 
-def qint_calcs(qfit, qs_bincentres, qs_hist):
+def qint_calcs_fit(qfit, qs_bincentres, qs_hist):
     """
     Calculates gain, peak-to-valley ratio and PE resolution from the
     integrated charge fit.
@@ -417,6 +416,31 @@ def qint_calcs(qfit, qs_bincentres, qs_hist):
 
     return gain, pv_r, pe_res
 
+def qint_calcs_peaks(peaks_i, qs_bincentres, qs_hist):
+    """
+    Calculates gain and peak-to-valley ratio from the peaks found (*not* the
+    gaussian fits, just the peaks).
+
+    :param list or array of ints peaks_i: The indices of the peaks in qhist,
+        starting with the pedestal (0pe).
+    :param list or array of floats qs_bincentres: The centres of the qhist bins.
+    :param list or array of floats qs_hist: The values of the qhist bins.
+    """
+    bin_width = qs_bincentres[1] - qs_bincentres[0]
+
+    # Gain is just average integrated charge for 1pe vs none.
+    gain = (peaks_i[1] - peaks_i[0])*bin_width/1.602e-19
+    print(f"Gain = {gain:g}")
+
+    # Valley between pedestal and 1pe peak
+    valley = min(qs_hist[peaks_i[0]:peaks_i[1]])
+
+    # Ratio of 1pe peak to valley
+    pv_r = qs_hist[peaks_i[1]]/valley
+    print(f"Peak-to-valley ratio = {pv_r:g}")
+
+    return gain, pv_r
+
 def main():
     # Use glob to expand wildcards
     fnames = []
@@ -432,11 +456,15 @@ def main():
         qs, wform_avg = process_wforms(fname)
 
         # Fit the integrated charge histo
-        qfit, qs_hist, qs_bincentres, bin_width, qfit_ax, qfit_fig = fit_qhist(qs)
+        qfit, qs_hist, qs_bincentres, peaks_i, qfit_ax = fit_qhist(qs)
+        bin_width = qs_bincentres[1] - qs_bincentres[0]
         qfit_ax.set_title(fname)
 
         # Get calcs from qhist
-        qint_calcs(qfit, qs_bincentres, qs_hist)
+        # qint_calcs_fit(qfit, qs_bincentres, qs_hist)
+
+        # Calculate based on the peak finder
+        qint_calcs_peaks(peaks_i, qs_bincentres, qs_hist)
 
         # Plot integrated charges using the histogram info given by fit_qhist()
         qint_ax.bar(qs_bincentres, qs_hist, width=bin_width, alpha=0.5)
