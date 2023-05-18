@@ -111,9 +111,6 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=20):
     # Get actual peak positions instead of just indices
     peaks = [x*bin_width+qs_bincentres[0] for x in peaks_i]
 
-    # TODO: instead, fit as many as npe, using spacing between previous peaks to
-    # estimate position of next ones
-
     # Iteratively add npe pe peaks to fit
     for i in range(npe+1):
         model += GaussianModel(prefix=f"g{i}pe_")
@@ -207,7 +204,7 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=20):
 
     return qfit, qs_hist, qs_bincentres, peaks_i, qfit_ax
 
-def quick_qint(wform):
+def quick_qint(wform, vbin_width=1):
     """
     Finds the integral of a pulse, defined by a window around the global
     minimum in the waveform.
@@ -246,7 +243,7 @@ def quick_qint(wform):
     # Effectively flip, offset to 0, integrate
     # Don't contribute negative charge to the integral.
     peak_wform_mod = [baseline-x for x in peak_wform]
-    qint = sum(peak_wform_mod)*digi_res
+    qint = sum(peak_wform_mod)*vbin_width
 
     return qint
 
@@ -262,15 +259,32 @@ def process_wforms(fname):
 
     if split_fname[1] == ".pkl":
         # If pickle file is passed just load wform list from that
+        # Voltage range and resolution should also be stored in pkl
         print("Loading from Pickle...")
         with open(fname, "rb") as f:
-            wforms = pickle.load(f)
+            wforms, vrange, vbin_width = pickle.load(f)
         print("... done! %i waveforms loaded." % len(wforms))
     else:
         print("Parsing XML...")
         tree = ET.parse(fname)
         root = tree.getroot()
         print("... done!")
+
+        # Get voltage range and resolution
+        digi = root.find("digitizer")
+        vrange_xml = digi.find("voltagerange").attrib
+        # Convert strings to floats for hi and low.
+        vlow = float(vrange_xml["low"])
+        vhi = float(vrange_xml["hi"])
+        vrange = (vlow, vhi)
+
+        res = digi.find("resolution").attrib["bits"]
+        # Convert bins to charge
+        # Get voltage range from digitiser, divide by number of bins (2^number
+        # of bits). 
+        vbin_width = (vrange[1]-vrange[0])/(2**int(res))
+        # Convert to mV
+        vbin_width *= 1e3
 
         print("Loading waveforms...")
         wforms = []
@@ -287,7 +301,7 @@ def process_wforms(fname):
         # Dump waveforms to pickle (quicker than parsing XML each time)
         pickle_fname = split_fname[0]+".pkl"
         with open(pickle_fname, "wb") as f:
-            pickle.dump(wforms, f)
+            pickle.dump((wforms,vrange,vbin_width), f)
         print("Saved to file %s." % pickle_fname)
 
     # Average waveform
@@ -310,7 +324,7 @@ def process_wforms(fname):
     print("Finding charge integrals...")
     for i,wform in enumerate(wforms):
         try:
-            qs.append(quick_qint(wform))
+            qs.append(quick_qint(wform,vbin_width))
         except IndexError:
             continue
         if (i % 100) == 0:
