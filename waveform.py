@@ -3,10 +3,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pickle
 import scipy.signal
+import pandas as pd
 from glob import glob
 from sys import argv
 from os.path import splitext, exists
 from lmfit.models import ConstantModel, GaussianModel
+from datetime import datetime as dt
 
 # Resolution of the CAEN digitiser
 digi_res = 4 # ns
@@ -386,8 +388,7 @@ def process_wforms(fname):
 
 def qint_calcs_fit(qfit, qs_bincentres, qs_hist):
     """
-    Calculates gain, peak-to-valley ratio and PE resolution from the
-    integrated charge fit.
+    Calculates gain and peak-to-valley ratio from the integrated charge fit.
 
     :param lmfit.model.ModelResult qfit: The fit of the integrated charge histo.
     :param list or array of floats qs_bincentres: The centres of the qhist bins.
@@ -396,11 +397,6 @@ def qint_calcs_fit(qfit, qs_bincentres, qs_hist):
 
     gped_center = qfit.best_values["g0pe_center"] # Or should this just be 0?
     g1pe_center = qfit.best_values["g1pe_center"]
-
-    g1pe_amp = qfit.best_values["g1pe_amplitude"]
-    g1pe_sig = qfit.best_values["g1pe_sigma"]
-
-    g1pe_sig = qfit.best_values["g1pe_sigma"]
 
     two_peaks_fitted = "g2pe_center" in qfit.best_values
 
@@ -455,11 +451,7 @@ def qint_calcs_fit(qfit, qs_bincentres, qs_hist):
     else:
         pv_r = None
 
-    # PE resolution I *think* uses the actual fit gaussian
-    pe_res = g1pe_sig/g1pe_amp
-    print(f"PE Resolution = {pe_res:g}")
-
-    return gain, pv_r, pe_res
+    return gain, pv_r
 
 def qint_calcs_peaks(peaks_i, qs_bincentres, qs_hist):
     """
@@ -490,6 +482,32 @@ def qint_calcs_peaks(peaks_i, qs_bincentres, qs_hist):
 
     return gain, pv_r
 
+def qint_calcs(qfit, peaks_i, qs_bincentres, qs_hist):
+    """
+    Calculates gain and peak-to-valley ratio from the peaks and fits.
+
+    :param lmfit.model.ModelResult qfit: The fit of the integrated charge histo.
+    :param list or array of ints peaks_i: The indices of the peaks in qhist,
+        starting with the pedestal (0pe).
+    :param list or array of floats qs_bincentres: The centres of the qhist bins.
+    :param list or array of floats qs_hist: The values of the qhist bins.
+    """
+    if len(peaks_i) >= 2:
+        gain, pv_r = qint_calcs_peaks(peaks_i, qs_bincentres, qs_hist)
+    else:
+        gain, pv_r = qint_calcs_fit(qfit, qs_bincentres, qs_hist)
+        
+    g1pe_amp = qfit.best_values["g1pe_amplitude"]
+    g1pe_sig = qfit.best_values["g1pe_sigma"]
+
+    print(f"1PE Sigma = {g1pe_sig:g}")
+        
+    # PE resolution uses the actual fit gaussian
+    pe_res = g1pe_sig/g1pe_amp
+    print(f"PE Resolution = {pe_res:g}")
+
+    return gain, pv_r, g1pe_sig, pe_res
+
 def main():
     # Use glob to expand wildcards
     fnames = []
@@ -502,6 +520,11 @@ def main():
     # Set up plotting figs/axes
     qint_fig, qint_ax = plt.subplots()
     wform_fig, wform_ax = plt.subplots()
+
+    gains = []
+    pv_rs = []
+    sigs = []
+    pe_ress = []
 
     for fname in fnames:
         # Keep American spelling for consistency...
@@ -516,7 +539,12 @@ def main():
         # qint_calcs_fit(qfit, qs_bincentres, qs_hist)
 
         # Calculate based on the peak finder
-        qint_calcs_peaks(peaks_i, qs_bincentres, qs_hist)
+        gain, pv_r, g1pe_sig, pe_res = qint_calcs(qfit, peaks_i, 
+            qs_bincentres, qs_hist)
+        gains.append(gain)
+        pv_rs.append(pv_r)
+        sigs.append(g1pe_sig)
+        pe_ress.append(pe_res)
 
         # Plot integrated charges using the histogram info given by fit_qhist()
         qint_ax.bar(qs_bincentres, qs_hist, width=bin_width, alpha=0.5)
@@ -538,6 +566,17 @@ def main():
         wform_ax.plot(xs, offset_data, label=fname)
         # wform_ax.plot(xs, wform_fit.best_fit, label=fname)
         # wform_ax.plot(xs, offset_fit, label=fname)
+
+    calcs = {
+        "fname": fnames,
+        "gain": gains,
+        "pv_r": pv_rs,
+        "sigma": sigs,
+        "pe_res": pe_ress
+    }
+    calcs_df = pd.DataFrame.from_dict(calcs)
+    csv_name = dt.now().strftime("%Y%m%d%H%M%S_pmt_measurements.csv")
+    calcs_df.to_csv(csv_name, index=False)
 
     qint_ax.legend()
     qint_ax.set_yscale("log")
