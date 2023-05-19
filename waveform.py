@@ -10,8 +10,8 @@ from lmfit.models import ConstantModel, GaussianModel
 
 # Resolution of the CAEN digitiser
 digi_res = 4 # ns
-qhist_bins = 200 # Number of bins to use when fitting and histing qint
-peak_prominence_fac = 100 # Prominance will be max value of hist/this
+qhist_bins = 500 # Number of bins to use when fitting and histing qint
+peak_prominence_fac = 200 # Prominance will be max value of hist/this
 
 # What to scale the gain calc by (to get diff units)
 # gain_scale = 1.602e-19
@@ -132,7 +132,6 @@ def fit_qhist(qs, npe=2):
         max_centre = 1.1
 
         min_width = 0.5
-        max_width = 3
     else:
         peak_width = 0.02*max(qs_bincentres)
         peak_spacing = 0.3*max(qs_bincentres)
@@ -142,11 +141,16 @@ def fit_qhist(qs, npe=2):
         max_centre = 2
 
         min_width = 0
-        max_width = np.inf 
+
+    max_widths = [4, 1.2]
+    max_widths.extend([2]*(npe-1))
 
     # Iteratively add npe pe peaks to fit
     for i in range(npe+1):
-        model += GaussianModel(prefix=f"g{i}pe_")
+        if model is None:
+            model = GaussianModel(prefix=f"g{i}pe_")
+        else:
+            model += GaussianModel(prefix=f"g{i}pe_")
 
         # First peak has width of peak_width, subsequent peaks will double in
         # width each time.
@@ -170,7 +174,7 @@ def fit_qhist(qs, npe=2):
             # Use spacing if on at least 1pe peak
             if i > 0:
                 spacing = peaks[i] - peaks[i-1]
-                width = spacing/4
+                width = spacing/3
         elif (len(peaks) > 1) and (i == len(peaks)):
             # If the peak to fit is one beyond the peaks found,
             # predict center using previous peak spacing
@@ -206,8 +210,10 @@ def fit_qhist(qs, npe=2):
         model.set_param_hint(f"g{i}pe_amplitude", value=amp)
 
         # model.set_param_hint(f"g{i}pe_sigma", value=width)
+        # model.set_param_hint(f"g{i}pe_sigma", value=width, 
+        #     min=min_width*width, max=max_width*width)
         model.set_param_hint(f"g{i}pe_sigma", value=width, 
-            min=min_width*width, max=max_width*width)
+            min=min_width*width, max=max_widths[i]*width)
 
     # Make the params of the model
     params = model.make_params()
@@ -232,9 +238,10 @@ def fit_qhist(qs, npe=2):
             qfit_ax.plot([qs_bincentres[0],qs_bincentres[-1]], [sub_mod]*2, 
                 label=name[:-1])
 
-    qfit_ax.plot(qs_bincentres, qfit.init_fit, "--", c="grey", alpha=0.5, 
-        label="Initial Fit")
-    qfit_ax.vlines(peaks, 0, max(qs_hist), colors="grey", linestyles="--", alpha=0.5)
+    # qfit_ax.plot(qs_bincentres, qfit.init_fit, "--", c="grey", alpha=0.5, 
+    #     label="Initial Fit")
+    qfit_ax.vlines(peaks, 0, max(qs_hist), colors="grey", linestyles="--", 
+        alpha=0.5)
 
     qfit_ax.legend()
 
