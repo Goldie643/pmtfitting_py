@@ -8,6 +8,7 @@ from glob import glob
 from sys import argv
 from os.path import splitext, exists
 from lmfit.models import ConstantModel, GaussianModel
+from lmfit import Model
 from datetime import datetime as dt
 
 # Resolution of the CAEN digitiser
@@ -102,14 +103,17 @@ def fit_qhist(qs, npe=2):
     # Don't currently use BG as it reduces effectiveness at fitting 2pe peak
     mod_bg = ConstantModel(prefix="bg_")
 
-    # For some reason initial fit seems to be lower than it should be, scale it
-    # up a bit to make it fit nicer initially
-    scale = 20
+    # Exponential aiming to model the under-amplified signals where electrons
+    # skip a dynode. lmfit's exp model isn't the right format, make our own.
+    def exp_bg(x, alpha):
+        return alpha*np.exp(-alpha*x)
+    mod_exp = Model(exp_bg, prefix="exp_")
 
     # Combine models
-    model = mod_bg
+    model = mod_bg + mod_exp
 
     model.set_param_hint("bg_c", value=0, max=max(qs_hist)/1e4)
+    model.set_param_hint("exp_alpha", value=max(qs_hist)/20)
 
     # Find peaks, with fairly stringent prominence requirement, and distance
     # being greater than 0.1 the total span of the hist.
@@ -284,9 +288,12 @@ def quick_qint(wform, vbin_width=1):
     baseline = sum(non_peak)/len(non_peak)
 
     # plt.clf()
-    # plt.plot(range(len(wform)), wform)
-    # plt.plot(range(peak_i-win_pre,peak_i+win_post), peak_wform)
-    # plt.plot([0,len(wform)], [baseline,baseline], c="grey", linestyle="--")
+    # plt.plot(range(len(wform)), wform, label="Outside Pulse")
+    # plt.plot(range(peak_i-win_pre,peak_i+win_post), peak_wform, 
+    #     label="Peak (Integral region)")
+    # plt.plot([0,len(wform)], [baseline,baseline], c="grey", linestyle="--", 
+    #     label="Calculated Baseline")
+    # plt.legend()
     # plt.show()
 
     # Integrate Q from within window, considering baseline
