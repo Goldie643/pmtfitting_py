@@ -11,6 +11,11 @@ from lmfit.models import ConstantModel, GaussianModel
 # Resolution of the CAEN digitiser
 digi_res = 4 # ns
 qhist_bins = 500 # Number of bins to use when fitting and histing qint
+peak_prominence_fac = 100 # Prominance will be max value of hist/this
+
+# What to scale the gain calc by (to get diff units)
+# gain_scale = 1.602e-19
+gain_scale = 1
 
 def fit_wform(wform):
     """
@@ -51,7 +56,7 @@ def fit_wform(wform):
 
     return result
 
-def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=20):
+def fit_qhist(qs, npe=2):
     """
     Fits Gaussians to the integrated charge histogram, fitting the pedestal, 1pe
     and 2pe peaks. Bins within the function.
@@ -97,19 +102,47 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=20):
 
     # For some reason initial fit seems to be lower than it should be, scale it
     # up a bit to make it fit nicer initially
-    scale = 30
+    scale = 20
 
     # Combine models
     model = mod_bg
 
     model.set_param_hint("bg_c", value=0, max=max(qs_hist)/1e4)
 
-    # Find peaks, with fairly stringent prominence requirement
-    peaks_i = scipy.signal.find_peaks(qs_hist, 
-        prominence=max(qs_hist)/1000)[0]
+    # Find peaks, with fairly stringent prominence requirement, and distance
+    # being greater than 0.1 the total span of the hist.
+    peaks_i_tmp = scipy.signal.find_peaks(qs_hist, 
+        prominence=max(qs_hist)/peak_prominence_fac,
+        distance = 0.1*len(qs_hist))[0]
+
+    peaks_i = peaks_i_tmp
 
     # Get actual peak positions instead of just indices
     peaks = [x*bin_width+qs_bincentres[0] for x in peaks_i]
+
+    # Use found peaks to estimate pedestal width and spacing
+    # This may be overwritten
+    if len(peaks) > 1:
+        peak_width = 0.05*(peaks[1] - peaks[0])
+        peak_spacing = peaks[1] - peaks[0]
+
+        # The limits on centre, tight if peaks are found
+        # As a factor on the value itself
+        min_centre = 0.9
+        max_centre = 1.1
+
+        min_width = 0.5
+        max_width = 2
+    else:
+        peak_width = 0.02*max(qs_bincentres)
+        peak_spacing = 0.3*max(qs_bincentres)
+
+        # Loosen limits on centre if only one peak found
+        min_centre = 0.5
+        max_centre = 2
+
+        min_width = 0
+        max_width = np.inf 
 
     # Iteratively add npe pe peaks to fit
     for i in range(npe+1):
@@ -120,10 +153,19 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=20):
         # Will be overidden if peaks were found.
         width = peak_width*(2**i)
 
+        # If beyond the peaks, let the width go as wide as it likes
+        # if i > (len(peaks) - 1):
+        #     min_width = 0
+        #     min_width = np.inf
+
+        #     min_centre = 0
+        #     min_centre = 10
+
+
         if i < len(peaks):
             # If this peak was found, use them as starting guesses
             center = peaks[i]
-            height = qs_hist[peaks_i[i]]
+            # height = qs_hist[peaks_i[i]]
 
             # Use spacing if on at least 1pe peak
             if i > 0:
@@ -137,36 +179,37 @@ def fit_qhist(qs, npe=2, peak_spacing=400, peak_width=20):
 
             # Get height by getting the index, again from prev spacing
             prev_spacing_i = peaks_i[i-1] - peaks_i[i-2]
-            height = qs_hist[peaks_i[i-1] + prev_spacing_i]
+            # height = qs_hist[peaks_i[i-1] + prev_spacing_i]
 
             # Assume width is double the previous peak spacing
             width = prev_spacing/2
         else:
             # Otherwise, just use the peak_spacing
-            # TODO: use peak spacing from peak finder for these too, if
-            # available
             center = i*peak_spacing
-
-            # Old method, predict based off of pedestal, not consistent
-            # height = max(qs_hist)/(10**i)
 
             # Just take the height at the centre guess, get index from
             # converting peak_spacing into index spacing
-            height = qs_hist[int(i*peak_spacing/bin_width)]
+            # height = qs_hist[int(center/bin_width)]
+
+        center_i_calc = center/bin_width
+        height = qs_hist[int(center/bin_width)]
 
         # Scale the amplitude to make the initial fit a bit nicer
         # height *= (i+1)*scale
         # height *= 5**(i+1)
-        height *= scale*(i+1)
+        # height *= scale*(i+1)
+        height *= (1-i)*scale
 
-        model.set_param_hint(f"g{i}pe_center", value=center, min=0.9*center, 
-            max=1.1*center)
+        # model.set_param_hint(f"g{i}pe_center", value=center)
+        model.set_param_hint(f"g{i}pe_center", value=center, 
+            min=min_centre*center, max=max_centre*center)
 
         # Hinting at height, not amplitude, doesn't work accurately for some reason
-        model.set_param_hint(f"g{i}pe_amplitude", value=height)
+        model.set_param_hint(f"g{i}pe_height", value=height)
 
-        model.set_param_hint(f"g{i}pe_sigma", value=width, min=0.75*width,
-            max=1.5*width)
+        # model.set_param_hint(f"g{i}pe_sigma", value=width)
+        model.set_param_hint(f"g{i}pe_sigma", value=width, 
+            min=min_width*width, max=max_width*width)
 
     # Make the params of the model
     params = model.make_params()
@@ -366,7 +409,8 @@ def qint_calcs_fit(qfit, qs_bincentres, qs_hist):
             return
 
     # Gain is just average integrated charge for 1pe vs none.
-    gain = (g1pe_center - gped_center)/1.602e-19
+    # gain = (g1pe_center - gped_center)/1.602e-19
+    gain = (g1pe_center - gped_center)/gain_scale
     print(f"Gain = {gain:g}")
 
     # Peak-to-valley is ratio of 1pe peak to valley between 1pe and pedestal. 
@@ -422,10 +466,14 @@ def qint_calcs_peaks(peaks_i, qs_bincentres, qs_hist):
     :param list or array of floats qs_bincentres: The centres of the qhist bins.
     :param list or array of floats qs_hist: The values of the qhist bins.
     """
+    if len(peaks_i) < 2:
+        print("Less than 2 peaks, can't make gain/PV calcs using peaks.")
+        return None, None
+
     bin_width = qs_bincentres[1] - qs_bincentres[0]
 
     # Gain is just average integrated charge for 1pe vs none.
-    gain = (peaks_i[1] - peaks_i[0])*bin_width/1.602e-19
+    gain = (peaks_i[1] - peaks_i[0])*bin_width/gain_scale
     print(f"Gain = {gain:g}")
 
     # Valley between pedestal and 1pe peak
@@ -442,6 +490,9 @@ def main():
     fnames = []
     for arg in argv[1:]:
         fnames += glob(arg)
+
+    if len(fnames) == 0:
+        return
 
     # Set up plotting figs/axes
     qint_fig, qint_ax = plt.subplots()
@@ -495,5 +546,7 @@ def main():
     wform_ax.set_ylabel("V [mV]")
 
     plt.show()
+
+    return
 
 if __name__ == "__main__": main()
