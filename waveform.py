@@ -10,7 +10,7 @@ from lmfit.models import ConstantModel, GaussianModel
 
 # Resolution of the CAEN digitiser
 digi_res = 4 # ns
-qhist_bins = 500 # Number of bins to use when fitting and histing qint
+qhist_bins = 200 # Number of bins to use when fitting and histing qint
 peak_prominence_fac = 100 # Prominance will be max value of hist/this
 
 # What to scale the gain calc by (to get diff units)
@@ -132,7 +132,7 @@ def fit_qhist(qs, npe=2):
         max_centre = 1.1
 
         min_width = 0.5
-        max_width = 2
+        max_width = 3
     else:
         peak_width = 0.02*max(qs_bincentres)
         peak_spacing = 0.3*max(qs_bincentres)
@@ -187,25 +187,23 @@ def fit_qhist(qs, npe=2):
             # Otherwise, just use the peak_spacing
             center = i*peak_spacing
 
-            # Just take the height at the centre guess, get index from
-            # converting peak_spacing into index spacing
-            # height = qs_hist[int(center/bin_width)]
 
-        center_i_calc = center/bin_width
-        height = qs_hist[int(center/bin_width)]
+        # Just take the height at the centre guess, get index from
+        # converting peak_spacing into index spacing
+        # height = qs_hist[int(center/bin_width)]
+        center_i_calc = int(center/bin_width - qs_bincentres[0])
+        height = qs_hist[center_i_calc]
 
-        # Scale the amplitude to make the initial fit a bit nicer
-        # height *= (i+1)*scale
-        # height *= 5**(i+1)
-        # height *= scale*(i+1)
-        height *= (1-i)*scale
+        # Calc amplitude from gaussian calc. 
+        # Doesn't perfectly line up but oh well.
+        amp = height*width*np.sqrt(2*np.pi)
 
         # model.set_param_hint(f"g{i}pe_center", value=center)
         model.set_param_hint(f"g{i}pe_center", value=center, 
             min=min_centre*center, max=max_centre*center)
 
         # Hinting at height, not amplitude, doesn't work accurately for some reason
-        model.set_param_hint(f"g{i}pe_height", value=height)
+        model.set_param_hint(f"g{i}pe_amplitude", value=amp)
 
         # model.set_param_hint(f"g{i}pe_sigma", value=width)
         model.set_param_hint(f"g{i}pe_sigma", value=width, 
