@@ -522,6 +522,7 @@ def main():
         fnames += glob(arg)
 
     if len(fnames) == 0:
+        print("Please give .xml or .pkl file to process.")
         return
 
     # Set up plotting figs/axes
@@ -574,17 +575,6 @@ def main():
         # wform_ax.plot(xs, wform_fit.best_fit, label=fname)
         # wform_ax.plot(xs, offset_fit, label=fname)
 
-    calcs = {
-        "fname": fnames,
-        "gain": gains,
-        "pv_r": pv_rs,
-        "sigma": sigs,
-        "pe_res": pe_ress
-    }
-    calcs_df = pd.DataFrame.from_dict(calcs)
-    csv_name = dt.now().strftime("%Y%m%d%H%M%S_pmt_measurements.csv")
-    calcs_df.to_csv(csv_name, index=False)
-
     qint_ax.legend()
     qint_ax.set_yscale("log")
     # Set lower limit to half a bin to avoid weird scaling
@@ -597,6 +587,25 @@ def main():
     wform_ax.set_ylabel("V [mV]")
 
     plt.show()
+
+    # Don't save data if flag not given
+    # TODO: Use actual argparse
+    if "--save" not in argv:
+        return
+
+    # Dump to csv via pandas
+    # Could do it manually but plotter already uses pandas and hey who doesn't
+    # love pandas, everyone should have it available.
+    calcs = {
+        "fname": fnames,
+        "gain": gains,
+        "pv_r": pv_rs,
+        "sigma": sigs,
+        "pe_res": pe_ress
+    }
+    calcs_df = pd.DataFrame.from_dict(calcs)
+    csv_name = dt.now().strftime("%Y%m%d%H%M%S_pmt_measurements.csv")
+    calcs_df.to_csv(csv_name, index=False)
 
     return
 
