@@ -17,8 +17,13 @@ qhist_bins = 500 # Number of bins to use when fitting and histing qint
 peak_prominence_fac = 200 # Prominance will be max value of hist/this
 
 # What to scale the gain calc by (to get diff units)
-# gain_scale = 1.602e-19
-gain_scale = 1
+# Digitiser resolution in ns, switch to s
+# Switch mV to V
+# Divide by e to get to gain
+gain_scale = digi_res*1e-9*1e-3/1.602e-19
+
+# This is in Mahdi's code and I don't know why but it gives good scaling
+gain_scale /= 50
 
 def fit_wform(wform):
     """
@@ -417,8 +422,8 @@ def qint_calcs_fit(qfit, qs_bincentres, qs_hist):
             return
 
     # Gain is just average integrated charge for 1pe vs none.
-    # gain = (g1pe_center - gped_center)/1.602e-19
-    gain = (g1pe_center - gped_center)/gain_scale
+    gain = (g1pe_center - gped_center)
+    gain *= gain_scale
     print(f"Gain = {gain:g}")
 
     # Peak-to-valley is ratio of 1pe peak to valley between 1pe and pedestal. 
@@ -477,7 +482,8 @@ def qint_calcs_peaks(peaks_i, qs_bincentres, qs_hist):
     bin_width = qs_bincentres[1] - qs_bincentres[0]
 
     # Gain is just average integrated charge for 1pe vs none.
-    gain = (peaks_i[1] - peaks_i[0])*bin_width/gain_scale
+    gain = (peaks_i[1] - peaks_i[0])*bin_width
+    gain *= gain_scale
     print(f"Gain = {gain:g}")
 
     # Valley between pedestal and 1pe peak
