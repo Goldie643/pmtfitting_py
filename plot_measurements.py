@@ -57,14 +57,20 @@ plot_cols = {
 
 for key,value in plot_cols.items():
     fig, ax = plt.subplots()
-    df_group[key].plot(legend=True, ax=ax)
+    
+    # Cycle through grouped df plotting each PMT
+    for pmt,df_pmt in df_group:
+        ax.plot(df_pmt[key], label=pmt)
 
     if len(argv) > 2:
         try:
-            nnvt_df_group[key].plot(legend=True, ax=ax)
+            # Same for NNVT df, if it has the info
+            for pmt,df_pmt in nnvt_df_group:
+                ax.plot(df_pmt[key], label=pmt)
         except:
             print(f"{key} not in NNVT data. Won't plot")
 
+    ax.legend()
     ax.set_xlabel("Voltage [V]")
     ax.set_ylabel(value)
 
