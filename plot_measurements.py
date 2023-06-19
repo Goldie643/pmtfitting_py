@@ -37,18 +37,15 @@ if len(argv) > 2:
     nnvt_fname = argv[2]
     nnvt_df = pd.read_csv(nnvt_fname)
 
-    print(nnvt_df)
-    print(df["model"])
-
     # Only get the same models for direct comparison
     nnvt_df = pd.merge(nnvt_df, df["model"].drop_duplicates())
-    print(nnvt_df)
     # Add clarification in label
     nnvt_df["model"] = nnvt_df["model"].apply(lambda x: x + " (NNVT)")
     nnvt_df = nnvt_df.sort_values(["v","model"], ascending=True)
     nnvt_df = nnvt_df.set_index("v")
 
-    nnvt_df["gain"] *= 100
+    # Given in units of 1e7
+    nnvt_df["gain"] *= 1e7
     nnvt_df_group = nnvt_df.groupby("model")
 
 plot_cols = {
