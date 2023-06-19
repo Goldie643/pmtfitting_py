@@ -55,18 +55,21 @@ plot_cols = {
     "pe_res" : "PE Resolution"
 }
 
+# Marker size is a bit small by default
+msize = 15
+
 for key,value in plot_cols.items():
     fig, ax = plt.subplots()
     
     # Cycle through grouped df plotting each PMT
     for pmt,df_pmt in df_group:
-        ax.plot(df_pmt[key], label=pmt)
+        ax.plot(df_pmt[key], label=pmt, marker="+", markersize=msize)
 
     if len(argv) > 2:
         try:
             # Same for NNVT df, if it has the info
             for pmt,df_pmt in nnvt_df_group:
-                ax.plot(df_pmt[key], label=pmt)
+                ax.plot(df_pmt[key], label=pmt, marker="+", markersize=msize)
         except:
             print(f"{key} not in NNVT data. Won't plot")
 
