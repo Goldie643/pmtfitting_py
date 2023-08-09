@@ -77,4 +77,6 @@ for key,value in plot_cols.items():
     ax.set_xlabel("Voltage [V]")
     ax.set_ylabel(value)
 
+    fig.set_size_inches(14,8)
+
 plt.show()
