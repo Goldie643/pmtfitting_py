@@ -63,13 +63,13 @@ for key,value in plot_cols.items():
     
     # Cycle through grouped df plotting each PMT
     for pmt,df_pmt in df_group:
-        ax.plot(df_pmt[key], label=pmt, marker="+", markersize=msize)
+        ax.plot(df_pmt[key], label=pmt, marker=".", markersize=msize)
 
     if len(argv) > 2:
         try:
             # Same for NNVT df, if it has the info
             for pmt,df_pmt in nnvt_df_group:
-                ax.plot(df_pmt[key], label=pmt, marker="+", markersize=msize)
+                ax.plot(df_pmt[key], label=pmt, marker=".", markersize=msize)
         except:
             print(f"{key} not in NNVT data. Won't plot")
 
