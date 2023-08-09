@@ -419,7 +419,7 @@ def qint_calcs_fit(qfit, qs_bincentres, qs_hist):
         if g2pe_center < g1pe_center:
             print("ISSUE WITH FIT")
             print("2pe curve is centred BELOW 1pe.")
-            return
+            return -1, -1
 
     # Gain is just average integrated charge for 1pe vs none.
     gain = (g1pe_center - gped_center)
@@ -555,6 +555,8 @@ def main():
         # Calculate based on the peak finder
         gain, pv_r, g1pe_sig, pe_res = qint_calcs(qfit, peaks_i, 
             qs_bincentres, qs_hist)
+        if gain == -1 and pv_r == -1:
+            print("Issues with fit mean file will be skipped.")
         gains.append(gain)
         pv_rs.append(pv_r)
         sigs.append(g1pe_sig)
