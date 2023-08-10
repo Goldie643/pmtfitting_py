@@ -50,10 +50,16 @@ if len(argv) > 2:
 
 plot_cols = {
     "gain" : "Gain", 
+    "chisqr" : r"$\chi^2$", 
     "pv_r" : "Peak-Valley Ratio", 
     "sigma" : r"$\sigma$", 
     "pe_res" : "PE Resolution"
 }
+
+# List of values to be log-plotted
+logs = [
+    "chisqr"
+]
 
 # Marker size is a bit small by default
 msize = 15
@@ -72,6 +78,10 @@ for key,value in plot_cols.items():
                 ax.plot(df_pmt[key], label=pmt, marker=".", markersize=msize)
         except:
             print(f"{key} not in NNVT data. Won't plot")
+
+    # Log it if set to
+    if key in logs:
+        ax.set_yscale("log")
 
     ax.legend()
     ax.set_xlabel("Voltage [V]")
