@@ -530,7 +530,7 @@ def main():
         print("--save       : Saves the fit information to csv.")
         print("--save_plots : Saves the qfit and wform plots to the input dir.")
         print("--show_plots : Shows the plots instead of saving them to file.")
-        print("WARNING: --show and --save_figs cannot be used together.")
+        print("WARNING: --show_plots and --save_figs cannot be used together.")
         return
 
     # Use glob to expand wildcards
@@ -622,7 +622,7 @@ def main():
     if "--save_plots" in argv:
         qint_fig.savefig(f"{now_str}_qint.pdf")
         wform_fig.savefig(f"{now_str}_wform.pdf")
-    elif "--show" in argv:
+    elif "--show_plots" in argv:
         plt.show()
 
     # Don't save data if flag not given
