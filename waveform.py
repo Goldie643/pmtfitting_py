@@ -540,6 +540,7 @@ def main():
     qint_fig.set_size_inches(14,8)
     wform_fig.set_size_inches(14,8)
 
+    chisqrs = []
     gains = []
     pv_rs = []
     sigs = []
@@ -551,6 +552,7 @@ def main():
 
         # Fit the integrated charge histo
         qfit, qs_hist, qs_bincentres, peaks_i, qfit_ax = fit_qhist(qs)
+        print(f"Chisqr = {qfit.chisqr:g}")
         bin_width = qs_bincentres[1] - qs_bincentres[0]
         qfit_ax.set_title(fname)
 
@@ -562,6 +564,7 @@ def main():
             qs_bincentres, qs_hist)
         if gain == -1 and pv_r == -1:
             print("Issues with fit mean file will be skipped.")
+        chisqrs.append(qfit.chisqr)
         gains.append(gain)
         pv_rs.append(pv_r)
         sigs.append(g1pe_sig)
@@ -611,6 +614,7 @@ def main():
     # love pandas, everyone should have it available.
     calcs = {
         "fname": fnames,
+        "chisqr": chisqrs,
         "gain": gains,
         "pv_r": pv_rs,
         "sigma": sigs,
