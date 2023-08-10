@@ -263,7 +263,9 @@ def fit_qhist(qs, npe=2):
     qfit_ax.set_ylim(bottom=0.1/len(qs))
     qfit_ax.set_yscale("log")
 
-    return qfit, qs_hist, qs_bincentres, peaks_i, qfit_ax
+    # Have to return ax and fig to set title to fname.
+    # Or could take plot title here instead.
+    return qfit, qs_hist, qs_bincentres, peaks_i, qfit_ax, qfit_fig
 
 def quick_qint(wform, vbin_width=1):
     """
@@ -524,6 +526,13 @@ def qint_calcs(qfit, peaks_i, qs_bincentres, qs_hist):
     return gain, pv_r, g1pe_sig, pe_res
 
 def main():
+    if "-h" in argv or "--help" in argv:
+        print("--save       : Saves the fit information to csv.")
+        print("--save_plots : Saves the qfit and wform plots to the input dir.")
+        print("--show_plots : Shows the plots instead of saving them to file.")
+        print("WARNING: --show and --save_figs cannot be used together.")
+        return
+
     # Use glob to expand wildcards
     fnames = []
     for arg in argv[1:]:
@@ -547,14 +556,19 @@ def main():
     pe_ress = []
 
     for fname in fnames:
+        split_fname = splitext(fname)
+
         # Keep American spelling for consistency...
         qs, wform_avg = process_wforms(fname)
 
         # Fit the integrated charge histo
-        qfit, qs_hist, qs_bincentres, peaks_i, qfit_ax = fit_qhist(qs)
+        qfit, qs_hist, qs_bincentres, peaks_i, qfit_ax, qfit_fig = fit_qhist(qs)
         print(f"Chisqr = {qfit.chisqr:g}")
         bin_width = qs_bincentres[1] - qs_bincentres[0]
         qfit_ax.set_title(fname)
+
+        if "--save_plots" in argv:
+            qfit_fig.savefig(f"{split_fname[0]}_qint.pdf")
 
         # Get calcs from qhist
         # qint_calcs_fit(qfit, qs_bincentres, qs_hist)
@@ -602,7 +616,14 @@ def main():
     wform_ax.set_xlabel("t [ns]")
     wform_ax.set_ylabel("V [mV]")
 
-    plt.show()
+    now_str = dt.now().strftime("%Y%m%d%H%M%S")
+
+    # Either saves or shows the plots
+    if "--save_plots" in argv:
+        qint_fig.savefig(f"{now_str}_qint.pdf")
+        wform_fig.savefig(f"{now_str}_wform.pdf")
+    elif "--show" in argv:
+        plt.show()
 
     # Don't save data if flag not given
     # TODO: Use actual argparse
@@ -621,7 +642,7 @@ def main():
         "pe_res": pe_ress
     }
     calcs_df = pd.DataFrame.from_dict(calcs)
-    csv_name = dt.now().strftime("%Y%m%d%H%M%S_pmt_measurements.csv")
+    csv_name = f"{now_str}_pmt_measurements.csv"
     calcs_df.to_csv(csv_name, index=False)
 
     return
