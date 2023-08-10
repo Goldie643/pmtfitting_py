@@ -22,8 +22,8 @@ peak_prominence_fac = 200 # Prominance will be max value of hist/this
 # Divide by e to get to gain
 gain_scale = digi_res*1e-9*1e-3/1.602e-19
 
-# This is in Mahdi's code and I don't know why but it gives good scaling
-gain_scale /= 50
+# Resistance of cable
+gain_scale /= 50 # Ohm
 
 def fit_wform(wform):
     """
@@ -236,6 +236,8 @@ def fit_qhist(qs, npe=2):
     components = qfit.eval_components()
 
     qfit_fig, qfit_ax = plt.subplots()
+    qfit_fig.set_size_inches(14,8)
+
     qfit_ax.bar(qs_bincentres, qs_hist, width=bin_width, label="Data", alpha=0.5)
     qfit_ax.plot(qs_bincentres, qfit.best_fit, label="Best Fit (Composite)")
     # Plot each component/submodel
@@ -534,6 +536,9 @@ def main():
     # Set up plotting figs/axes
     qint_fig, qint_ax = plt.subplots()
     wform_fig, wform_ax = plt.subplots()
+
+    qint_fig.set_size_inches(14,8)
+    wform_fig.set_size_inches(14,8)
 
     gains = []
     pv_rs = []
