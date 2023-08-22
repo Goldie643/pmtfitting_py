@@ -313,10 +313,10 @@ def quick_qint(wform, vbin_width=1):
 
     return qint
 
-def process_wforms(fname):
+def load_wforms(fname):
     """
-    Opens CAEN digitizer XML output.
-    Combines traces to to return average waveform.
+    Opens CAEN digitizer XML output and returns waveforms and digitiser 
+    setttings.
 
     :param str fname: filename of input XML.
     """
@@ -330,46 +330,51 @@ def process_wforms(fname):
         with open(fname, "rb") as f:
             wforms, vrange, vbin_width = pickle.load(f)
         print("... done! %i waveforms loaded." % len(wforms))
-    else:
-        print("Parsing XML...")
-        tree = ET.parse(fname)
-        root = tree.getroot()
-        print("... done!")
 
-        # Get voltage range and resolution
-        digi = root.find("digitizer")
-        vrange_xml = digi.find("voltagerange").attrib
-        # Convert strings to floats for hi and low.
-        vlow = float(vrange_xml["low"])
-        vhi = float(vrange_xml["hi"])
-        vrange = (vlow, vhi)
+        return wforms, vrange, vbin_width
 
-        res = digi.find("resolution").attrib["bits"]
-        # Convert bins to charge
-        # Get voltage range from digitiser, divide by number of bins (2^number
-        # of bits). 
-        vbin_width = (vrange[1]-vrange[0])/(2**int(res))
-        # Convert to mV
-        vbin_width *= 1e3
+    print("Parsing XML...")
+    tree = ET.parse(fname)
+    root = tree.getroot()
+    print("... done!")
 
-        print("Loading waveforms...")
-        wforms = []
-        # Loops through every "event" in the XML, each with a "trace" (waveform)
-        for i,child in enumerate(root.iter("event")):
-            # Trace is spaced wform values. Split on spaces and convert to np array.
-            # Use int as dtype to ensure numpy arithmetic.
-            wform = np.array(child.find("trace").text.split()).astype(int)
-            wforms.append(wform)
-            if (i % 100) == 0:
-                print("    %i loaded...\r" % i, end="")
-        print("... done! %i waveforms loaded." % i)
+    # Get voltage range and resolution
+    digi = root.find("digitizer")
+    vrange_xml = digi.find("voltagerange").attrib
+    # Convert strings to floats for hi and low.
+    vlow = float(vrange_xml["low"])
+    vhi = float(vrange_xml["hi"])
+    vrange = (vlow, vhi)
 
-        # Dump waveforms to pickle (quicker than parsing XML each time)
-        pickle_fname = split_fname[0]+".pkl"
-        with open(pickle_fname, "wb") as f:
-            pickle.dump((wforms,vrange,vbin_width), f)
-        print("Saved to file %s." % pickle_fname)
+    res = digi.find("resolution").attrib["bits"]
+    # Convert bins to charge
+    # Get voltage range from digitiser, divide by number of bins (2^number
+    # of bits). 
+    vbin_width = (vrange[1]-vrange[0])/(2**int(res))
+    # Convert to mV
+    vbin_width *= 1e3
 
+    print("Loading waveforms...")
+    wforms = []
+    # Loops through every "event" in the XML, each with a "trace" (waveform)
+    for i,child in enumerate(root.iter("event")):
+        # Trace is spaced wform values. Split on spaces and convert to np array.
+        # Use int as dtype to ensure numpy arithmetic.
+        wform = np.array(child.find("trace").text.split()).astype(int)
+        wforms.append(wform)
+        if (i % 100) == 0:
+            print("    %i loaded...\r" % i, end="")
+    print("... done! %i waveforms loaded." % i)
+
+    # Dump waveforms to pickle (quicker than parsing XML each time)
+    pickle_fname = split_fname[0]+".pkl"
+    with open(pickle_fname, "wb") as f:
+        pickle.dump((wforms,vrange,vbin_width), f)
+    print("Saved to file %s." % pickle_fname)
+
+    return wforms, vrange, vbin_width
+
+def process_wforms_q(wforms, split_fname, vbin_width):
     # Average waveform
     wform_avg = sum(wforms)/len(wforms)
 
@@ -559,7 +564,8 @@ def main():
         split_fname = splitext(fname)
 
         # Keep American spelling for consistency...
-        qs, wform_avg = process_wforms(fname)
+        wforms, vrange, vbin_width = load_wforms(fname)
+        qs, wform_avg = process_wforms_q(wforms, split_fname, vbin_width)
 
         # Fit the integrated charge histo
         qfit, qs_hist, qs_bincentres, peaks_i, qfit_ax, qfit_fig = fit_qhist(qs)
