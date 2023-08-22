@@ -408,11 +408,15 @@ def process_wforms_q(wforms, split_fname, vbin_width):
     return qs, wform_avg
 
 def process_wforms_dr(wforms, vbin_width):
-    threshold = -5
+    n_thresh = 20
+    thresholds = np.linspace(-0.5,-2.5, n_thresh)
+    passes = [0]*len(thresholds)
 
-    n_passes = 0
+    import time
+    start = time.time()
+    for i,wform in enumerate(wforms):
+        print(f"Waveforms checked: {i}\r",end="")
 
-    for wform in wforms:
         wform_trunc = wform.copy()
         # Truncated mean, only use the middle 50% of values to find baseline
         wform_trunc.sort()
@@ -421,13 +425,29 @@ def process_wforms_dr(wforms, vbin_width):
         baseline = sum(wform_trunc)/len(wform_trunc)
 
         # Offset to 0 and scale to be voltage
-        wform_offset = [v-baseline for v in wform]
-        wform_offset = [v*vbin_width for v in wform_offset]
+        # Using np array is much quicker here
+        wform_offset = np.array(wform, dtype=np.float64)
+        wform_offset -= baseline
+        wform_offset *= vbin_width
+        wform_min = min(wform_offset)
 
-        if min(wform_offset) < threshold:
-            n_passes += 1
+        for i,threshold in enumerate(thresholds):
+            if wform_min < threshold:
+                passes[i] += 1
+    print(f"Time taken: {time.time() - start}")
 
-    print(n_passes)
+    passes_frac = [x/len(wforms) for x in passes]
+
+    # TODO: convert this into an actual dark rate.
+    # Need to count peaks that pass threshold in window, get window length.
+    # Currently we are effectively assuming a maximum of one peak per window.
+    plt.plot(thresholds, passes_frac)
+    plt.scatter(thresholds, passes_frac, marker="x")
+    plt.show()
+
+    # pass_percent = n_passes*100.0/len(wforms)
+
+    # print(f"{n_passes} of {len(wforms)} wforms passed threshold ({pass_percent}%).")
 
     return
 
