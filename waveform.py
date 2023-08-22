@@ -407,9 +407,9 @@ def process_wforms_q(wforms, split_fname, vbin_width):
 
     return qs, wform_avg
 
-def process_wforms_dr(wforms, vbin_width):
+def process_wforms_dr(wforms, vbin_width, window_t=300e-9):
     n_thresh = 20
-    thresholds = np.linspace(-0.5,-2.5, n_thresh)
+    thresholds = np.linspace(-1,-10, n_thresh)
     passes = [0]*len(thresholds)
 
     import time
@@ -431,19 +431,39 @@ def process_wforms_dr(wforms, vbin_width):
         wform_offset *= vbin_width
         wform_min = min(wform_offset)
 
+        # if wform_min < thresholds[int(len(thresholds)/2)]:
+        #     plt.plot(wform_offset)
+        #     plt.show()
+        #     exit()
+
         for i,threshold in enumerate(thresholds):
-            if wform_min < threshold:
-                passes[i] += 1
+            in_peak = False
+            for x in wform_offset:
+                if x > threshold:
+                    in_peak = True
+                elif in_peak:
+                    # No longer in peak beyond thresh, set to out of peak and
+                    # iterate up.
+                    in_peak = False
+                    passes[i] += 1
+            # if wform_min < threshold:
+            #     passes[i] += 1
     print(f"Time taken: {time.time() - start}")
 
-    passes_frac = [x/len(wforms) for x in passes]
+    # Scale by total livetime to get dark rate
+    drs = [x/(len(wforms)*window_t) for x in passes]
 
     # TODO: convert this into an actual dark rate.
     # Need to count peaks that pass threshold in window, get window length.
     # Currently we are effectively assuming a maximum of one peak per window.
-    plt.plot(thresholds, passes_frac)
-    plt.scatter(thresholds, passes_frac, marker="x")
+    plt.plot(thresholds, drs)
+    plt.scatter(thresholds, drs, marker="x")
+    plt.yscale("log")
     plt.show()
+
+    # plt.plot(thresholds, passes)
+    # plt.scatter(thresholds, passes, marker="x")
+    # plt.show()
 
     # pass_percent = n_passes*100.0/len(wforms)
 
