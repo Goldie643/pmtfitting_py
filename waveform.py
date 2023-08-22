@@ -363,19 +363,38 @@ def load_wforms(fname):
     n_channels = int(digi.find("channels").attrib["value"])
     # ith wforms is the list of wforms for channel i of digi
     wforms = [[]]*n_channels
+    print(wforms)
 
     print("Loading waveforms...")
     # Loops through every "event" in the XML, each with a "trace" (waveform)
     for i,child in enumerate(root.iter("event")):
         # Trace is spaced wform values. Split on spaces and convert to np array.
         # Use int as dtype to ensure numpy arithmetic.
-        wform = child.find("trace")
-        wform_channel = int(wform.attrib["channel"])
-        wform = np.array(wform.text.split()).astype(int)
-        wforms[wform_channel].append(wform)
+        for wform in child.iter("trace"):
+            wform_channel = int(wform.attrib["channel"])
+            wform = np.array(wform.text.split()).astype(int)
+            wforms[wform_channel].append(wform)
+            print(wforms[3])
         if (i % 100) == 0:
-            print("    %i loaded...\r" % i, end="")
-    print("... done! %i waveforms loaded." % i)
+            print("    %i loaded...\r" % i*n_channels, end="")
+
+        exit()
+        
+        break
+    print("... done! %i waveforms loaded." % i*n_channels)
+
+    for channel in wforms:
+        print(channel[0])
+        tot_wform = None
+        for wform in channel:
+            if tot_wform is None:
+                tot_wform = wform
+            else:
+                tot_wform += wform
+        plt.plot(range(len(tot_wform)), (tot_wform - np.mean(tot_wform)))
+
+    plt.show()
+    exit()
 
     # Dump waveforms to pickle (quicker than parsing XML each time)
     pickle_fname = split_fname[0]+".pkl"
@@ -624,7 +643,7 @@ def process_files_q(fnames):
 
         # Keep American spelling for consistency...
         wforms, vrange, vbin_width, trig_window = load_wforms(fname)
-        qs, wform_avg = process_wforms_q(wforms, split_fname, vbin_width)
+        qs, wform_avg = process_wforms_q(wforms[0], split_fname, vbin_width)
 
         # Fit the integrated charge histo
         qfit, qs_hist, qs_bincentres, peaks_i, qfit_ax, qfit_fig = fit_qhist(qs)
