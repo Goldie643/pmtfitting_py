@@ -545,29 +545,7 @@ def qint_calcs(qfit, peaks_i, qs_bincentres, qs_hist):
 
     return gain, pv_r, g1pe_sig, pe_res
 
-def main():
-    if "-h" in argv or "--help" in argv:
-        print("--save       : Saves the fit information to csv.")
-        print("--save_plots : Saves the qfit and wform plots to the input dir.")
-        print("--show_plots : Shows the plots instead of saving them to file.")
-        print("--q          : Integrate peaks to measure gain, PEres/sigma, PV ratio.")
-        print("--dr         : Dark rate calculation, count peaks above thresholds.")
-        print("WARNING: --show_plots and --save_figs cannot be used together.")
-        return
-
-    if "--q" not in argv and "--dr" not in argv:
-        print("Please pass --q (q integral) or --dr (dark rate) as an argument.")
-        return
-
-    # Use glob to expand wildcards
-    fnames = []
-    for arg in argv[1:]:
-        fnames += glob(arg)
-
-    if len(fnames) == 0:
-        print("Please give .xml or .pkl file to process.")
-        return
-
+def process_files_q(fnames):
     # Set up plotting figs/axes
     qint_fig, qint_ax = plt.subplots()
     wform_fig, wform_ax = plt.subplots()
@@ -671,6 +649,42 @@ def main():
     calcs_df = pd.DataFrame.from_dict(calcs)
     csv_name = f"{now_str}_pmt_measurements.csv"
     calcs_df.to_csv(csv_name, index=False)
+    return
+
+def process_files_dr(fnames):
+    for fname in fnames:
+        wforms, vrange, vbin_width = load_wforms(fname)
+        process_wforms_dr(wforms)
+
+    return
+
+def main():
+    if "-h" in argv or "--help" in argv:
+        print("--save       : Saves the fit information to csv.")
+        print("--save_plots : Saves the qfit and wform plots to the input dir.")
+        print("--show_plots : Shows the plots instead of saving them to file.")
+        print("--q          : Integrate peaks to measure gain, PEres/sigma, PV ratio.")
+        print("--dr         : Dark rate calculation, count peaks above thresholds.")
+        print("WARNING: --show_plots and --save_figs cannot be used together."
+            " Same for --q and --dr")
+        return
+
+    # Use glob to expand wildcards
+    fnames = []
+    for arg in argv[1:]:
+        fnames += glob(arg)
+
+    if len(fnames) == 0:
+        print("Please give .xml or .pkl file to process.")
+        return
+
+    if "--q" in argv:
+        process_files_q(fnames)
+    elif "--dr" in argv:
+        process_wforms_dr(fnames)
+    else:
+        print("Please pass --q (q integral) or --dr (dark rate) as an argument.")
+        return
 
     return
 
