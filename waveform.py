@@ -328,10 +328,10 @@ def load_wforms(fname):
         # Voltage range and resolution should also be stored in pkl
         print("Loading from Pickle...")
         with open(fname, "rb") as f:
-            wforms, vrange, vbin_width = pickle.load(f)
+            wforms, vrange, vbin_width, trig_window = pickle.load(f)
         print("... done! %i waveforms loaded." % len(wforms))
 
-        return wforms, vrange, vbin_width
+        return wforms, vrange, vbin_width, trig_window
 
     print("Parsing XML...")
     tree = ET.parse(fname)
@@ -354,6 +354,12 @@ def load_wforms(fname):
     # Convert to mV
     vbin_width *= 1e3
 
+    res = digi.find("resolution").attrib["bits"]
+
+    # Get the trigger window
+    trig_window = root.find("settings").find("window")
+    trig_window = float(trig_window.attrib["size"])
+
     print("Loading waveforms...")
     wforms = []
     # Loops through every "event" in the XML, each with a "trace" (waveform)
@@ -369,10 +375,10 @@ def load_wforms(fname):
     # Dump waveforms to pickle (quicker than parsing XML each time)
     pickle_fname = split_fname[0]+".pkl"
     with open(pickle_fname, "wb") as f:
-        pickle.dump((wforms,vrange,vbin_width), f)
+        pickle.dump((wforms,vrange,vbin_width,trig_window), f)
     print("Saved to file %s." % pickle_fname)
 
-    return wforms, vrange, vbin_width
+    return wforms, vrange, vbin_width, trig_window
 
 def process_wforms_q(wforms, split_fname, vbin_width):
     # Average waveform
@@ -407,7 +413,7 @@ def process_wforms_q(wforms, split_fname, vbin_width):
 
     return qs, wform_avg
 
-def process_wforms_dr(wforms, vbin_width, window_t=300e-9):
+def process_wforms_dr(wforms, vbin_width, trig_window):
     n_thresh = 20
     thresholds = np.linspace(-1,-10, n_thresh)
     passes = [0]*len(thresholds)
@@ -451,7 +457,7 @@ def process_wforms_dr(wforms, vbin_width, window_t=300e-9):
     print(f"Time taken: {time.time() - start}")
 
     # Scale by total livetime to get dark rate
-    drs = [x/(len(wforms)*window_t) for x in passes]
+    drs = [x/(len(wforms)*trig_window) for x in passes]
 
     # TODO: convert this into an actual dark rate.
     # Need to count peaks that pass threshold in window, get window length.
@@ -612,7 +618,7 @@ def process_files_q(fnames):
         split_fname = splitext(fname)
 
         # Keep American spelling for consistency...
-        wforms, vrange, vbin_width = load_wforms(fname)
+        wforms, vrange, vbin_width, trig_window = load_wforms(fname)
         qs, wform_avg = process_wforms_q(wforms, split_fname, vbin_width)
 
         # Fit the integrated charge histo
@@ -702,8 +708,8 @@ def process_files_q(fnames):
 
 def process_files_dr(fnames):
     for fname in fnames:
-        wforms, vrange, vbin_width = load_wforms(fname)
-        process_wforms_dr(wforms, vbin_width)
+        wforms, vrange, vbin_width, trig_window = load_wforms(fname)
+        process_wforms_dr(wforms, vbin_width, trig_window)
 
     return
 
