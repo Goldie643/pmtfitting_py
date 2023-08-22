@@ -407,6 +407,21 @@ def process_wforms_q(wforms, split_fname, vbin_width):
 
     return qs, wform_avg
 
+def process_wforms_dr(wforms):
+
+    for wform in wforms:
+        # Truncated mean, only use the middle 50% of values to find baseline
+        wform.sort()
+        wform_lim = int(len(wform)/4)
+        wform = wform[wform_lim:-wform_lim]
+        baseline = sum(wform)/len(wform)
+        plt.plot(wform)
+        plt.hlines(baseline)
+        plt.show()
+        exit()
+
+    return
+
 def qint_calcs_fit(qfit, qs_bincentres, qs_hist):
     """
     Calculates gain and peak-to-valley ratio from the integrated charge fit.
@@ -535,7 +550,13 @@ def main():
         print("--save       : Saves the fit information to csv.")
         print("--save_plots : Saves the qfit and wform plots to the input dir.")
         print("--show_plots : Shows the plots instead of saving them to file.")
+        print("--q          : Integrate peaks to measure gain, PEres/sigma, PV ratio.")
+        print("--dr         : Dark rate calculation, count peaks above thresholds.")
         print("WARNING: --show_plots and --save_figs cannot be used together.")
+        return
+
+    if "--q" not in argv and "--dr" not in argv:
+        print("Please pass --q (q integral) or --dr (dark rate) as an argument.")
         return
 
     # Use glob to expand wildcards
