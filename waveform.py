@@ -361,20 +361,16 @@ def load_wforms(fname):
     trig_window = float(trig_window.attrib["size"])
 
     n_channels = int(digi.find("channels").attrib["value"])
-    # Key in dict is digitiser channel, corresponding to list of waveforms
-    # from that channel
-    # XML stores channel as stringed integer for each trace, match dict
-    # key to this
-    wforms = {}
-    for i in range(n_channels):
-        wforms[str(i)] = []
+    # ith wforms is the list of wforms for channel i of digi
+    wforms = [[]]*n_channels
+
     print("Loading waveforms...")
     # Loops through every "event" in the XML, each with a "trace" (waveform)
     for i,child in enumerate(root.iter("event")):
         # Trace is spaced wform values. Split on spaces and convert to np array.
         # Use int as dtype to ensure numpy arithmetic.
         wform = child.find("trace")
-        wform_channel = wform.attrib["channel"]
+        wform_channel = int(wform.attrib["channel"])
         wform = np.array(wform.text.split()).astype(int)
         wforms[wform_channel].append(wform)
         if (i % 100) == 0:
