@@ -407,18 +407,27 @@ def process_wforms_q(wforms, split_fname, vbin_width):
 
     return qs, wform_avg
 
-def process_wforms_dr(wforms):
+def process_wforms_dr(wforms, vbin_width):
+    threshold = -5
+
+    n_passes = 0
 
     for wform in wforms:
+        wform_trunc = wform.copy()
         # Truncated mean, only use the middle 50% of values to find baseline
-        wform.sort()
-        wform_lim = int(len(wform)/4)
-        wform = wform[wform_lim:-wform_lim]
-        baseline = sum(wform)/len(wform)
-        plt.plot(wform)
-        plt.hlines(baseline)
-        plt.show()
-        exit()
+        wform_trunc.sort()
+        wform_trunc_lim = int(len(wform_trunc)/4)
+        wform_trunc = wform_trunc[wform_trunc_lim:-wform_trunc_lim]
+        baseline = sum(wform_trunc)/len(wform_trunc)
+
+        # Offset to 0 and scale to be voltage
+        wform_offset = [v-baseline for v in wform]
+        wform_offset = [v*vbin_width for v in wform_offset]
+
+        if min(wform_offset) < threshold:
+            n_passes += 1
+
+    print(n_passes)
 
     return
 
@@ -654,7 +663,7 @@ def process_files_q(fnames):
 def process_files_dr(fnames):
     for fname in fnames:
         wforms, vrange, vbin_width = load_wforms(fname)
-        process_wforms_dr(wforms)
+        process_wforms_dr(wforms, vbin_width)
 
     return
 
@@ -681,7 +690,7 @@ def main():
     if "--q" in argv:
         process_files_q(fnames)
     elif "--dr" in argv:
-        process_wforms_dr(fnames)
+        process_files_dr(fnames)
     else:
         print("Please pass --q (q integral) or --dr (dark rate) as an argument.")
         return
