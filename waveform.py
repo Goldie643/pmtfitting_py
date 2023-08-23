@@ -362,8 +362,7 @@ def load_wforms(fname):
 
     n_channels = int(digi.find("channels").attrib["value"])
     # ith wforms is the list of wforms for channel i of digi
-    wforms = [[]]*n_channels
-    print(wforms)
+    wforms = [[] for i in range(n_channels)]
 
     print("Loading waveforms...")
     # Loops through every "event" in the XML, each with a "trace" (waveform)
@@ -374,27 +373,26 @@ def load_wforms(fname):
             wform_channel = int(wform.attrib["channel"])
             wform = np.array(wform.text.split()).astype(int)
             wforms[wform_channel].append(wform)
-            print(wforms[3])
+
         if (i % 100) == 0:
             print("    %i loaded...\r" % i*n_channels, end="")
 
-        exit()
-        
-        break
     print("... done! %i waveforms loaded." % i*n_channels)
 
-    for channel in wforms:
-        print(channel[0])
-        tot_wform = None
-        for wform in channel:
-            if tot_wform is None:
-                tot_wform = wform
-            else:
-                tot_wform += wform
-        plt.plot(range(len(tot_wform)), (tot_wform - np.mean(tot_wform)))
+    # for i,channel in enumerate(wforms):
+    #     if len(channel) == 0:
+    #         continue
+    #     tot_wform = None
+    #     for wform in channel:
+    #         if tot_wform is None:
+    #             tot_wform = wform
+    #         else:
+    #             tot_wform += wform
+    #     plt.plot(range(len(tot_wform)), (tot_wform - np.mean(tot_wform)), label=f"Channel {i}")
 
-    plt.show()
-    exit()
+    # plt.legend()
+    # plt.show()
+    # exit()
 
     # Dump waveforms to pickle (quicker than parsing XML each time)
     pickle_fname = split_fname[0]+".pkl"
