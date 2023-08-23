@@ -362,7 +362,7 @@ def load_wforms(fname):
 
     n_channels = int(digi.find("channels").attrib["value"])
     # ith wforms is the list of wforms for channel i of digi
-    wforms = [[] for i in range(n_channels)]
+    channels = [[] for i in range(n_channels)]
 
     print("Loading waveforms...")
     # Loops through every "event" in the XML, each with a "trace" (waveform)
@@ -372,18 +372,18 @@ def load_wforms(fname):
         for wform in child.iter("trace"):
             wform_channel = int(wform.attrib["channel"])
             wform = np.array(wform.text.split()).astype(int)
-            wforms[wform_channel].append(wform)
+            channels[wform_channel].append(wform)
 
         if (i % 100) == 0:
             print("    %i loaded...\r" % i*n_channels, end="")
 
     print("... done! %i waveforms loaded." % i*n_channels)
 
-    # for i,channel in enumerate(wforms):
-    #     if len(channel) == 0:
+    # for i,wforms in enumerate(channels):
+    #     if len(wforms) == 0:
     #         continue
     #     tot_wform = None
-    #     for wform in channel:
+    #     for wform in wforms:
     #         if tot_wform is None:
     #             tot_wform = wform
     #         else:
@@ -400,7 +400,7 @@ def load_wforms(fname):
         pickle.dump((wforms,vrange,vbin_width,trig_window), f)
     print("Saved to file %s." % pickle_fname)
 
-    return wforms, vrange, vbin_width, trig_window
+    return channels, vrange, vbin_width, trig_window
 
 def process_wforms_q(wforms, split_fname, vbin_width):
     # Average waveform
@@ -640,8 +640,8 @@ def process_files_q(fnames):
         split_fname = splitext(fname)
 
         # Keep American spelling for consistency...
-        wforms, vrange, vbin_width, trig_window = load_wforms(fname)
-        qs, wform_avg = process_wforms_q(wforms[0], split_fname, vbin_width)
+        channels, vrange, vbin_width, trig_window = load_wforms(fname)
+        qs, wform_avg = process_wforms_q(channels[0], split_fname, vbin_width)
 
         # Fit the integrated charge histo
         qfit, qs_hist, qs_bincentres, peaks_i, qfit_ax, qfit_fig = fit_qhist(qs)
@@ -730,8 +730,8 @@ def process_files_q(fnames):
 
 def process_files_dr(fnames):
     for fname in fnames:
-        wforms, vrange, vbin_width, trig_window = load_wforms(fname)
-        process_wforms_dr(wforms, vbin_width, trig_window)
+        channels, vrange, vbin_width, trig_window = load_wforms(fname)
+        process_wforms_dr(channels, vbin_width, trig_window)
 
     return
 
