@@ -328,10 +328,11 @@ def load_wforms(fname):
         # Voltage range and resolution should also be stored in pkl
         print("Loading from Pickle...")
         with open(fname, "rb") as f:
-            wforms, vrange, vbin_width, trig_window = pickle.load(f)
-        print("... done! %i waveforms loaded." % len(wforms))
+            channels, vrange, vbin_width, trig_window = pickle.load(f)
+        n_wforms = sum([len(wforms) for wforms in channels])
+        print("... done! %i waveforms loaded." % n_wforms)
 
-        return wforms, vrange, vbin_width, trig_window
+        return channels, vrange, vbin_width, trig_window
 
     print("Parsing XML...")
     tree = ET.parse(fname)
@@ -397,7 +398,7 @@ def load_wforms(fname):
     # Dump waveforms to pickle (quicker than parsing XML each time)
     pickle_fname = split_fname[0]+".pkl"
     with open(pickle_fname, "wb") as f:
-        pickle.dump((wforms,vrange,vbin_width,trig_window), f)
+        pickle.dump((channels,vrange,vbin_width,trig_window), f)
     print("Saved to file %s." % pickle_fname)
 
     return channels, vrange, vbin_width, trig_window
@@ -435,57 +436,62 @@ def process_wforms_q(wforms, split_fname, vbin_width):
 
     return qs, wform_avg
 
-def process_wforms_dr(wforms, vbin_width, trig_window):
-    n_thresh = 20
+def process_wforms_dr(channels, vbin_width, trig_window):
+    n_thresh = 10
     thresholds = np.linspace(-1,-10, n_thresh)
-    passes = [0]*len(thresholds)
+    passes = [[0]*len(thresholds) for i in range(len(channels))]
 
     import time
     start = time.time()
-    for i,wform in enumerate(wforms):
-        print(f"Waveforms checked: {i}\r",end="")
+    for i,wforms in enumerate(channels):
+        for j,wform in enumerate(wforms):
+            print(f"Waveforms checked: {i*j+j}\r",end="")
 
-        wform_trunc = wform.copy()
-        # Truncated mean, only use the middle 50% of values to find baseline
-        wform_trunc.sort()
-        wform_trunc_lim = int(len(wform_trunc)/4)
-        wform_trunc = wform_trunc[wform_trunc_lim:-wform_trunc_lim]
-        baseline = sum(wform_trunc)/len(wform_trunc)
+            wform_trunc = wform.copy()
+            # Truncated mean, only use the middle 50% of values to find baseline
+            wform_trunc.sort()
+            wform_trunc_lim = int(len(wform_trunc)/4)
+            wform_trunc = wform_trunc[wform_trunc_lim:-wform_trunc_lim]
+            baseline = sum(wform_trunc)/len(wform_trunc)
 
-        # Offset to 0 and scale to be voltage
-        # Using np array is much quicker here
-        wform_offset = np.array(wform, dtype=np.float64)
-        wform_offset -= baseline
-        wform_offset *= vbin_width
-        wform_min = min(wform_offset)
+            # Offset to 0 and scale to be voltage
+            # Using np array is much quicker here
+            wform_offset = np.array(wform, dtype=np.float64)
+            wform_offset -= baseline
+            wform_offset *= vbin_width
+            wform_min = min(wform_offset)
 
-        # if wform_min < thresholds[int(len(thresholds)/2)]:
-        #     plt.plot(wform_offset)
-        #     plt.show()
-        #     exit()
+            # if wform_min < thresholds[int(len(thresholds)/2)]:
+            #     plt.plot(wform_offset)
+            #     plt.show()
+            #     exit()
 
-        for i,threshold in enumerate(thresholds):
-            in_peak = False
-            for x in wform_offset:
-                if x > threshold:
-                    in_peak = True
-                elif in_peak:
-                    # No longer in peak beyond thresh, set to out of peak and
-                    # iterate up.
-                    in_peak = False
-                    passes[i] += 1
-            # if wform_min < threshold:
-            #     passes[i] += 1
+            for k,threshold in enumerate(thresholds):
+                in_peak = False
+                for x in wform_offset:
+                    if x > threshold:
+                        in_peak = True
+                    elif in_peak:
+                        # No longer in peak beyond thresh, set to out of peak and
+                        # iterate up.
+                        in_peak = False
+                        passes[i][k] += 1
+                # if wform_min < threshold:
+                #     passes[i] += 1
     print(f"Time taken: {time.time() - start}")
 
     # Scale by total livetime to get dark rate
-    drs = [x/(len(wforms)*trig_window) for x in passes]
+    drs = []
+    for i in range(len(passes)):
+        if len(channels[i]) == 0:
+            continue
+        drs.append([x/(len(channels[i])*trig_window) for x in passes[i]])
+        plt.plot(thresholds, drs[-1], label=f"Channel {i}")
+        plt.scatter(thresholds, drs[-1], marker="x")
 
-    # TODO: convert this into an actual dark rate.
-    # Need to count peaks that pass threshold in window, get window length.
-    # Currently we are effectively assuming a maximum of one peak per window.
-    plt.plot(thresholds, drs)
-    plt.scatter(thresholds, drs, marker="x")
+    plt.legend()
+    plt.ylabel("Dark rate [/s]")
+    plt.xlabel("Threshold [mV]")
     plt.yscale("log")
     plt.show()
 
