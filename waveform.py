@@ -369,7 +369,9 @@ def load_wforms(fname):
         print("Loading wforms from feather...")
         channels = pd.read_feather(feather_fname)
         # Prog written on assumption channels is list of lists of wforms
-        channels = channels.values.tolist()
+        # Transpose and put back in this form
+        # TODO: Keep as pandas maybe?
+        channels = channels.T.values.tolist()
 
         # Remove None-s from channels (filled when made into a df)
         for i in range(len(channels)):
@@ -457,7 +459,7 @@ def process_wforms_q(wforms, split_fname, vbin_width):
     return qs, wform_avg
 
 def process_wforms_dr(channels, vbin_width, trig_window):
-    n_thresh = 10
+    n_thresh = 20
     thresholds = np.linspace(-1,-10, n_thresh)
     passes = [[0]*len(thresholds) for i in range(len(channels))]
 
