@@ -323,21 +323,19 @@ def load_wforms(fname):
     print("File: %s" % fname)
     split_fname = splitext(fname)
 
-    if split_fname[1] == ".pkl":
-        # If pickle file is passed just load wform list from that
-        # Voltage range and resolution should also be stored in pkl
-        print("Loading from Pickle...")
-        with open(fname, "rb") as f:
-            channels, vrange, vbin_width, trig_window = pickle.load(f)
-        n_wforms = sum([len(wforms) for wforms in channels])
-        print("... done! %i waveforms loaded." % n_wforms)
-
-        return channels, vrange, vbin_width, trig_window
+    feather_fname = split_fname[0]+"_wforms.feather"
 
     print("Parsing XML...")
-    tree = ET.parse(fname)
-    root = tree.getroot()
-    print("... done!")
+    # fname may be xml regardless but saves a logic gate
+    try:
+        tree = ET.parse(fname)
+        root = tree.getroot()
+        print("... done!")
+    except FileNotFoundError:
+        print(f"FileNotFoundError: {fname} not found.")
+        print("The xml is required for digitiser info, please ensure xml files is"
+            "passed (feather will automatically be used).")
+        exit()
 
     # Get voltage range and resolution
     digi = root.find("digitizer")
@@ -365,6 +363,24 @@ def load_wforms(fname):
     # ith wforms is the list of wforms for channel i of digi
     channels = [[] for i in range(n_channels)]
 
+    # Check if there's a feather file to pull from
+    # Skip if this is going to be regenerated
+    if exists(feather_fname) and "--redo_feather" not in argv:
+        print("Loading wforms from feather...")
+        channels = pd.read_feather(feather_fname)
+        # Prog written on assumption channels is list of lists of wforms
+        channels = channels.values.tolist()
+
+        # Remove None-s from channels (filled when made into a df)
+        for i in range(len(channels)):
+            channels[i] = [x for x in channels[i] if x is not None]
+
+        n_wforms = sum([len(wforms) for wforms in channels])
+        print("... done! %i waveforms loaded." % n_wforms)
+
+        return channels, vrange, vbin_width, trig_window
+
+    # Pull wforms from the xml
     print("Loading waveforms...")
     # Loops through every "event" in the XML, each with a "trace" (waveform)
     for i,child in enumerate(root.iter("event")):
@@ -376,9 +392,9 @@ def load_wforms(fname):
             channels[wform_channel].append(wform)
 
         if (i % 100) == 0:
-            print("    %i loaded...\r" % i*n_channels, end="")
+            print(f"    {i*n_channels} loaded...\r", end="")
 
-    print("... done! %i waveforms loaded." % i*n_channels)
+    print(f"... done! {i*n_channels} waveforms loaded.")
 
     # for i,wforms in enumerate(channels):
     #     if len(wforms) == 0:
@@ -395,11 +411,15 @@ def load_wforms(fname):
     # plt.show()
     # exit()
 
-    # Dump waveforms to pickle (quicker than parsing XML each time)
-    pickle_fname = split_fname[0]+".pkl"
-    with open(pickle_fname, "wb") as f:
-        pickle.dump((channels,vrange,vbin_width,trig_window), f)
-    print("Saved to file %s." % pickle_fname)
+    # Convert waveforms to dataframe, save to feather
+    # Get digi info straight from the XML
+    # List of lists like channels needs transposing so channels are columns
+    channels_df = pd.DataFrame(channels).T
+    # Feather needs string column names
+    channels_df.columns = channels_df.columns.map(str)
+    channels_df.to_feather(feather_fname)
+
+    print(f"Saved wforms to {feather_fname}.")
 
     return channels, vrange, vbin_width, trig_window
 
@@ -443,9 +463,11 @@ def process_wforms_dr(channels, vbin_width, trig_window):
 
     import time
     start = time.time()
+    n_checked = 0
     for i,wforms in enumerate(channels):
         for j,wform in enumerate(wforms):
-            print(f"Waveforms checked: {i*j+j}\r",end="")
+            if (n_checked % 100) == 0:
+                print(f"    Waveforms checked: {n_checked}\r",end="")
 
             wform_trunc = wform.copy()
             # Truncated mean, only use the middle 50% of values to find baseline
@@ -478,6 +500,8 @@ def process_wforms_dr(channels, vbin_width, trig_window):
                         passes[i][k] += 1
                 # if wform_min < threshold:
                 #     passes[i] += 1
+
+            n_checked += 1
     print(f"Time taken: {time.time() - start}")
 
     # Scale by total livetime to get dark rate
@@ -647,6 +671,7 @@ def process_files_q(fnames):
 
         # Keep American spelling for consistency...
         channels, vrange, vbin_width, trig_window = load_wforms(fname)
+        print("ONLY USING CHANNEL 0")
         qs, wform_avg = process_wforms_q(channels[0], split_fname, vbin_width)
 
         # Fit the integrated charge histo
@@ -743,11 +768,14 @@ def process_files_dr(fnames):
 
 def main():
     if "-h" in argv or "--help" in argv:
-        print("--save       : Saves the fit information to csv.")
-        print("--save_plots : Saves the qfit and wform plots to the input dir.")
-        print("--show_plots : Shows the plots instead of saving them to file.")
-        print("--q          : Integrate peaks to measure gain, PEres/sigma, PV ratio.")
-        print("--dr         : Dark rate calculation, count peaks above thresholds.")
+        print("This program will automatically save traces to a feather file.")
+        print("When running in future, it will pull the traces from the feather.")
+        print("--redo_feather : if you want to regenerate this file.")
+        print("--save         : Saves the fit information to csv.")
+        print("--save_plots   : Saves the qfit and wform plots to the input dir.")
+        print("--show_plots   : Shows the plots instead of saving them to file.")
+        print("--q            : Integrate peaks to measure gain, PEres/sigma, PV ratio.")
+        print("--dr           : Dark rate calculation, count peaks above thresholds.")
         print("WARNING: --show_plots and --save_figs cannot be used together."
             " Same for --q and --dr")
         return
@@ -758,7 +786,7 @@ def main():
         fnames += glob(arg)
 
     if len(fnames) == 0:
-        print("Please give .xml or .pkl file to process.")
+        print("Please give .xml file to process.")
         return
 
     if "--q" in argv:
