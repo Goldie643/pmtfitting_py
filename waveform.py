@@ -4,6 +4,7 @@ import numpy as np
 import pickle
 import scipy.signal
 import pandas as pd
+import time
 from glob import glob
 from sys import argv
 from os.path import splitext, exists
@@ -458,12 +459,9 @@ def process_wforms_q(wforms, split_fname, vbin_width):
 
     return qs, wform_avg
 
-def process_wforms_dr(channels, vbin_width, trig_window):
-    n_thresh = 20
-    thresholds = np.linspace(-1,-10, n_thresh)
+def process_wforms_dr(channels, vbin_width, trig_window, thresholds):
     passes = [[0]*len(thresholds) for i in range(len(channels))]
 
-    import time
     start = time.time()
     n_checked = 0
     for i,wforms in enumerate(channels):
@@ -512,15 +510,6 @@ def process_wforms_dr(channels, vbin_width, trig_window):
         if len(channels[i]) == 0:
             continue
         drs.append([x/(len(channels[i])*trig_window) for x in passes[i]])
-        plt.plot(thresholds, drs[-1], label=f"Channel {i}")
-        plt.scatter(thresholds, drs[-1], marker="x")
-
-    plt.legend()
-    plt.ylabel("Dark rate [/s]")
-    plt.xlabel("Threshold [mV]")
-    plt.yscale("log")
-    plt.show()
-
     # plt.plot(thresholds, passes)
     # plt.scatter(thresholds, passes, marker="x")
     # plt.show()
@@ -529,7 +518,7 @@ def process_wforms_dr(channels, vbin_width, trig_window):
 
     # print(f"{n_passes} of {len(wforms)} wforms passed threshold ({pass_percent}%).")
 
-    return
+    return drs
 
 def qint_calcs_fit(qfit, qs_bincentres, qs_hist):
     """
@@ -762,9 +751,32 @@ def process_files_q(fnames):
     return
 
 def process_files_dr(fnames):
+
+    # Thresholds to scan to check dark rate
+    n_thresh = 20
+    thresholds = np.linspace(-1,-10, n_thresh)
+
+    dr_fig, dr_ax = plt.subplots()
+    dr_fig.set_size_inches(14,8)
+
     for fname in fnames:
         channels, vrange, vbin_width, trig_window = load_wforms(fname)
-        process_wforms_dr(channels, vbin_width, trig_window)
+        drs = process_wforms_dr(channels, vbin_width, trig_window, thresholds)
+
+        for i,dr in enumerate(drs):
+            dr_ax.plot(thresholds, dr, label=f"Channel {i}")
+            dr_ax.scatter(thresholds, dr, marker="x")
+
+        dr_ax.legend()
+        dr_ax.set_ylabel("Dark rate [/s]")
+        dr_ax.set_xlabel("Threshold [mV]")
+        dr_ax.set_yscale("log")
+
+        if "--show_plots" in argv:
+            plt.show()
+        elif "--save_plots" in argv:
+            plot_fname = splitext(fname)[0]+"_dr.pdf"
+            dr_fig.savefig(plot_fname)
 
     return
 
@@ -781,6 +793,17 @@ def main():
         print("WARNING: --show_plots and --save_figs cannot be used together."
             " Same for --q and --dr")
         return
+
+    output_args = ["--save", "--save_plots", "--show_plots"]
+    if not any([(arg in output_args) for arg in argv]):
+        print("WARNING: No output args given.") 
+        print(f"Include one of the following for output: {' '.join(output_args)}")
+        # Give them a few to notice the warning
+        countdown_i = 3
+        for i in range(countdown_i, 0, -1):
+            print(f"Running in {i}    \r", end="")
+            time.sleep(1)
+        print()
 
     # Use glob to expand wildcards
     fnames = []
