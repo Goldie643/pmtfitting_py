@@ -760,23 +760,27 @@ def process_files_dr(fnames):
     dr_fig.set_size_inches(14,8)
 
     for fname in fnames:
-        channels, vrange, vbin_width, trig_window = load_wforms(fname)
-        drs = process_wforms_dr(channels, vbin_width, trig_window, thresholds)
+        try:
+            channels, vrange, vbin_width, trig_window = load_wforms(fname)
+            drs = process_wforms_dr(channels, vbin_width, trig_window, thresholds)
 
-        for i,dr in enumerate(drs):
-            dr_ax.plot(thresholds, dr, label=f"Channel {i}")
-            dr_ax.scatter(thresholds, dr, marker="x")
+            for i,dr in enumerate(drs):
+                dr_ax.plot(thresholds, dr, label=f"Channel {i}")
+                dr_ax.scatter(thresholds, dr, marker="x")
 
-        dr_ax.legend()
-        dr_ax.set_ylabel("Dark rate [/s]")
-        dr_ax.set_xlabel("Threshold [mV]")
-        dr_ax.set_yscale("log")
+            dr_ax.legend()
+            dr_ax.set_ylabel("Dark rate [/s]")
+            dr_ax.set_xlabel("Threshold [mV]")
+            dr_ax.set_yscale("log")
 
-        if "--show_plots" in argv:
-            plt.show()
-        elif "--save_plots" in argv:
-            plot_fname = splitext(fname)[0]+"_dr.pdf"
-            dr_fig.savefig(plot_fname)
+            if "--show_plots" in argv:
+                plt.show()
+            elif "--save_plots" in argv:
+                plot_fname = splitext(fname)[0]+"_dr.pdf"
+                dr_fig.savefig(plot_fname)
+                plt.cla()
+        except Exception as e:
+            print(e)
 
     return
 
