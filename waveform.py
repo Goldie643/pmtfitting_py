@@ -461,7 +461,7 @@ def process_wforms_q(wforms, split_fname, vbin_width):
 
 def process_wforms_dr(channels, vbin_width, trig_window, thresholds):
     passes = [[0]*len(thresholds) for i in range(len(channels))]
-
+    
     start = time.time()
     n_checked = 0
     for i,wforms in enumerate(channels):
@@ -509,7 +509,12 @@ def process_wforms_dr(channels, vbin_width, trig_window, thresholds):
     for i in range(len(passes)):
         if len(channels[i]) == 0:
             continue
-        drs.append([x/(len(channels[i])*trig_window) for x in passes[i]])
+        drs.append([x/(len(channels[i])*trig_window*1e-9) for x in passes[i]])
+
+    passes_df = pd.DataFrame(passes).T.rename(lambda x: f"ch{x}_passes",axis="columns")
+    passes_df["threshold"] = thresholds
+    print(passes_df)
+
     # plt.plot(thresholds, passes)
     # plt.scatter(thresholds, passes, marker="x")
     # plt.show()
