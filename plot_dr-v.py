@@ -38,7 +38,6 @@ def main():
     # Use glob to expand wildcards
     fnames = []
     for arg in argv[1:]:
-        print(glob(arg))
         fnames += glob(arg)
 
     dfs = [pd.read_csv(x) for x in fnames]
@@ -62,11 +61,19 @@ def main():
 
     dr_v_df = dr_v_df.sort_values("v")
 
+    # Columns are the channel labels from waveform.py with _dr suffix
     dr_cols = [x for x in dr_v_df.columns if x.endswith("_dr")]
     labels = [x[:-3] for x in dr_cols]
-    plt.plot(dr_v_df["v"], dr_v_df[dr_cols], label=labels, marker=".")
-    plt.legend()
-    plt.yscale("log")
+
+    dr_fig, dr_ax = plt.subplots()
+    dr_fig.set_size_inches(14,8)
+
+    dr_ax.plot(dr_v_df["v"], dr_v_df[dr_cols], label=labels, marker=".")
+    dr_ax.legend()
+    dr_ax.set_yscale("log")
+
+    dr_ax.set_xlabel("Supply Voltage [V]")
+    dr_ax.set_ylabel("Dark Rate [/s]")
     plt.show()
 
     return
