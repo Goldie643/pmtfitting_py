@@ -5,6 +5,7 @@ import pickle
 import scipy.signal
 import pandas as pd
 import time
+import traceback
 from glob import glob
 from sys import argv
 from os.path import splitext, exists
@@ -16,6 +17,7 @@ from datetime import datetime as dt
 digi_res = 4 # ns
 qhist_bins = 500 # Number of bins to use when fitting and histing qint
 peak_prominence_fac = 200 # Prominance will be max value of hist/this
+digi_channels = 4 # number of channels in the digitiser
 
 # What to scale the gain calc by (to get diff units)
 # Digitiser resolution in ns, switch to s
@@ -25,6 +27,39 @@ gain_scale = digi_res*1e-9*1e-3/1.602e-19
 
 # Resistance of cable
 gain_scale /= 50 # Ohm
+
+def get_channel_labels():
+    """
+    Parse argv to get the labels of each channel, usually which PMT is connected
+    """
+
+    # Default to generic labelling if none are given 
+    if "--channels" not in argv:
+        print("No channel labels given, will use default labelling.")
+        print("Use --channels [label1] [label2] ... to label channels.")
+        return [f"Channel {i}" for i in range(digi_channels)]
+
+    channel_labels = []
+    channel_flag = False
+    for arg in argv:
+        # Found the channel flag
+        if arg == "--channels":
+            channel_flag = True
+            # Don't want to append flag to labels
+            continue 
+        
+        # Skip until it's found
+        if not channel_flag:
+            continue
+
+        # Add arg to the labels until number of channels is reached
+        # Doesn't really matter if it's too long, only channels that have data
+        # will be labelled
+        channel_labels.append(arg)
+        if len(channel_labels) >= digi_channels:
+            break
+
+    return channel_labels
 
 def fit_wform(wform):
     """
@@ -459,15 +494,18 @@ def process_wforms_q(wforms, split_fname, vbin_width):
 
     return qs, wform_avg
 
-def process_wforms_dr(channels, vbin_width, trig_window, thresholds):
+def process_wforms_dr(channels, vbin_width, trig_window, thresholds, 
+    channel_labels):
     passes = [[0]*len(thresholds) for i in range(len(channels))]
     
     start = time.time()
-    n_checked = 0
+    # Check how many are checked in each channel
+    n_checked = [0]*len(channels)
     for i,wforms in enumerate(channels):
         for j,wform in enumerate(wforms):
-            if (n_checked % 100) == 0:
-                print(f"    Waveforms checked: {n_checked}\r",end="")
+            n_checked[i] += 1
+            if (sum(n_checked) % 100) == 0:
+                print(f"    Waveforms checked: {sum(n_checked)}\r",end="")
 
             wform_trunc = wform.copy()
             # Truncated mean, only use the middle 50% of values to find baseline
@@ -500,12 +538,20 @@ def process_wforms_dr(channels, vbin_width, trig_window, thresholds):
                         passes[i][k] += 1
                 # if wform_min < threshold:
                 #     passes[i] += 1
-
-            n_checked += 1
     print(f"Time taken: {time.time() - start}")
 
+    # Only store passes for channels that had data
+    passes_tidy = []
+    for passx, checks in zip(passes,n_checked):
+        if checks > 0:
+            passes_tidy.append(passx)
+
     # Transpose to have channels as columns
-    passes_df = pd.DataFrame(passes).T.rename(lambda x: f"ch{x}_passes",axis="columns")
+    passes_df = pd.DataFrame(passes_tidy).T
+
+    # Rename up to the number of channels that actually have data (len(passes))
+    pass_cols = [(ch+"_passes") for ch in channel_labels[:len(passes_tidy)]]
+    passes_df.columns = pass_cols
     passes_df["threshold"] = thresholds
 
     # Reorder to put thresholds on the first column for improved readability
@@ -518,8 +564,8 @@ def process_wforms_dr(channels, vbin_width, trig_window, thresholds):
             continue
 
         # Scale passes for all thresholds in channel
-        dr = [x/(len(channels[i])*trig_window*1e-9) for x in passes[i]]
-        passes_df[f"ch{i}_dr"] = dr
+        dr = [x/(len(channels[i])*trig_window*1e-9) for x in passes_tidy[i]]
+        passes_df[channel_labels[i] + "_dr"] = dr
 
     print(passes_df)
 
@@ -763,8 +809,7 @@ def process_files_q(fnames):
     calcs_df.to_csv(csv_name, index=False)
     return
 
-def process_files_dr(fnames, channel_labels=[f"Channel {i}" for i in range(4)]):
-
+def process_files_dr(fnames):
     # Thresholds to scan to check dark rate
     n_thresh = 20
     thresholds = np.linspace(-1,-10, n_thresh)
@@ -772,20 +817,23 @@ def process_files_dr(fnames, channel_labels=[f"Channel {i}" for i in range(4)]):
     dr_fig, dr_ax = plt.subplots()
     dr_fig.set_size_inches(14,8)
 
+    channel_labels = get_channel_labels()
     for fname in fnames:
         try:
             channels, vrange, vbin_width, trig_window = load_wforms(fname)
-            passes = process_wforms_dr(channels, vbin_width, trig_window, thresholds)
+            passes = process_wforms_dr(channels, vbin_width, trig_window,
+                thresholds, channel_labels)
 
             csv_fname = splitext(fname)[0]+"_dr.csv"
             passes.to_csv(csv_fname, index=False)
             print("Saved dark count info to " + csv_fname)
 
             # for i,dr in enumerate(drs):
+            # TODO CATCH THE SPECIFIC ERRORS
             for i in range(len(channels)):
                 try:
-                    dr = passes[f"ch{i}_dr"]
-                except KeyError:
+                    dr = passes[channel_labels[i] + "_dr"]
+                except:
                     print(f"No channel {i} data, won't plot.")
                     continue
                 dr_ax.plot(thresholds, dr, label=channel_labels[i])
@@ -802,8 +850,8 @@ def process_files_dr(fnames, channel_labels=[f"Channel {i}" for i in range(4)]):
                 plot_fname = splitext(fname)[0]+"_dr.pdf"
                 dr_fig.savefig(plot_fname)
                 plt.cla()
-        except Exception as e:
-            print(e)
+        except Exception:
+            traceback.print_exc()
 
     return
 
@@ -817,6 +865,7 @@ def main():
         print("--show_plots   : Shows the plots instead of saving them to file.")
         print("--q            : Integrate peaks to measure gain, PEres/sigma, PV ratio.")
         print("--dr           : Dark rate calculation, count peaks above thresholds.")
+        print("--channels     : The labels for each channels (usually which PMT is connected).")
         print("WARNING: --show_plots and --save_figs cannot be used together."
             " Same for --q and --dr")
         return
