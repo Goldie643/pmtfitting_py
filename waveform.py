@@ -811,7 +811,7 @@ def process_files_q(fnames):
 
 def process_files_dr(fnames):
     # Thresholds to scan to check dark rate
-    n_thresh = 20
+    n_thresh = 19
     thresholds = np.linspace(-1,-10, n_thresh)
 
     dr_fig, dr_ax = plt.subplots()
