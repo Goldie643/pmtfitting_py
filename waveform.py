@@ -504,15 +504,23 @@ def process_wforms_dr(channels, vbin_width, trig_window, thresholds):
             n_checked += 1
     print(f"Time taken: {time.time() - start}")
 
-    # Scale by total livetime to get dark rate
-    drs = []
+    # Transpose to have channels as columns
+    passes_df = pd.DataFrame(passes).T.rename(lambda x: f"ch{x}_passes",axis="columns")
+    passes_df["threshold"] = thresholds
+
+    # Reorder to put thresholds on the first column for improved readability
+    cols_nothresh = [x for x in passes_df.columns.tolist() if x != "threshold"]
+    passes_df = passes_df[["threshold"] + cols_nothresh]
+
+    # Go through each channel and scale by total livetime to get dark rate
     for i in range(len(passes)):
         if len(channels[i]) == 0:
             continue
-        drs.append([x/(len(channels[i])*trig_window*1e-9) for x in passes[i]])
 
-    passes_df = pd.DataFrame(passes).T.rename(lambda x: f"ch{x}_passes",axis="columns")
-    passes_df["threshold"] = thresholds
+        # Scale passes for all thresholds in channel
+        dr = [x/(len(channels[i])*trig_window*1e-9) for x in passes[i]]
+        passes_df[f"ch{i}_dr"] = dr
+
     print(passes_df)
 
     # plt.plot(thresholds, passes)
@@ -523,7 +531,7 @@ def process_wforms_dr(channels, vbin_width, trig_window, thresholds):
 
     # print(f"{n_passes} of {len(wforms)} wforms passed threshold ({pass_percent}%).")
 
-    return drs
+    return passes_df
 
 def qint_calcs_fit(qfit, qs_bincentres, qs_hist):
     """
@@ -755,7 +763,7 @@ def process_files_q(fnames):
     calcs_df.to_csv(csv_name, index=False)
     return
 
-def process_files_dr(fnames):
+def process_files_dr(fnames, channel_labels=[f"Channel {i}" for i in range(4)]):
 
     # Thresholds to scan to check dark rate
     n_thresh = 20
@@ -767,10 +775,20 @@ def process_files_dr(fnames):
     for fname in fnames:
         try:
             channels, vrange, vbin_width, trig_window = load_wforms(fname)
-            drs = process_wforms_dr(channels, vbin_width, trig_window, thresholds)
+            passes = process_wforms_dr(channels, vbin_width, trig_window, thresholds)
 
-            for i,dr in enumerate(drs):
-                dr_ax.plot(thresholds, dr, label=f"Channel {i}")
+            csv_fname = splitext(fname)[0]+"_dr.csv"
+            passes.to_csv(csv_fname, index=False)
+            print("Saved dark count info to " + csv_fname)
+
+            # for i,dr in enumerate(drs):
+            for i in range(len(channels)):
+                try:
+                    dr = passes[f"ch{i}_dr"]
+                except KeyError:
+                    print(f"No channel {i} data, won't plot.")
+                    continue
+                dr_ax.plot(thresholds, dr, label=channel_labels[i])
                 dr_ax.scatter(thresholds, dr, marker="x")
 
             dr_ax.legend()
