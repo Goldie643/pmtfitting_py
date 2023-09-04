@@ -815,7 +815,6 @@ def process_files_dr(fnames):
     thresholds = np.linspace(-1,-10, n_thresh)
 
     dr_fig, dr_ax = plt.subplots()
-    dr_fig.set_size_inches(14,8)
 
     channel_labels = get_channel_labels()
     for fname in fnames:
@@ -839,16 +838,31 @@ def process_files_dr(fnames):
                 dr_ax.plot(thresholds, dr, label=channel_labels[i])
                 dr_ax.scatter(thresholds, dr, marker="x")
 
-            dr_ax.legend()
-            dr_ax.set_ylabel("Dark rate [/s]")
-            dr_ax.set_xlabel("Threshold [mV]")
+            dr_fig.set_size_inches(14,8)
+
+            fontsize = 15
+            dr_ax.legend(fontsize=fontsize)
+            dr_ax.set_ylabel("Dark rate [/s]", fontsize=fontsize)
+            dr_ax.set_xlabel("Threshold [mV]", fontsize=fontsize)
             dr_ax.set_yscale("log")
 
+            dr_ax.tick_params(labelsize=fontsize)
+
+            f_basename = splitext(fname)[0]
+
+            # Pickle the fig and ax for future editing.
+            mpl_fname = f_basename + "_dr_mpl.pkl"
+            with open(mpl_fname, "wb") as f:
+                pickle.dump((dr_fig, dr_ax), f)
+                print("Saved mpl fig and axes to " + mpl_fname)
+
+            # TODO: Make both work together (save, show, cla?)
             if "--show_plots" in argv:
                 plt.show()
             elif "--save_plots" in argv:
-                plot_fname = splitext(fname)[0]+"_dr.pdf"
-                dr_fig.savefig(plot_fname)
+                plot_fname = f_basename+"_dr.pdf"
+                dr_fig.savefig(plot_fname, dpi=300)
+                print("Saved plot to " + plot_fname)
                 plt.cla()
         except Exception:
             traceback.print_exc()
