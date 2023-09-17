@@ -16,9 +16,10 @@ def get_v_from_fname(row):
     # Get brand model and voltage from filename
     brand, model, voltage = base.split("_")
     brand = brand_dict[brand]
-    # Get rid of "v" in string
-    voltage = float(voltage[:-1])
-    return brand, model, voltage
+    # Get rid of "v" in string if there
+    if voltage[-1] == "v":
+        voltage = voltage[:-1]
+    return brand, model, float(voltage)
 
 # Expand here means when apply returns multiple values, they get assigned to
 # each given new column
