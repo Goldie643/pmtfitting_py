@@ -7,6 +7,8 @@ brand_dict = {"ham": "Hamamatsu", "nnvt" : "NNVT"}
 
 fname = argv[1]
 
+fdt = fname.split("_")[0]
+
 df = pd.read_csv(fname)
 
 # Assumes standarde file naming format
@@ -65,6 +67,8 @@ logs = [
 # Marker size is a bit small by default
 msize = 15
 
+fontsize = 15
+
 for key,value in plot_cols.items():
     fig, ax = plt.subplots()
     
@@ -84,10 +88,12 @@ for key,value in plot_cols.items():
     if key in logs:
         ax.set_yscale("log")
 
-    ax.legend()
-    ax.set_xlabel("Voltage [V]")
-    ax.set_ylabel(value)
+    ax.legend(fontsize=fontsize)
+    ax.set_xlabel("Voltage [V]",fontsize=fontsize)
+    ax.set_ylabel(value, fontsize=fontsize)
 
     fig.set_size_inches(14,8)
+
+    fig.savefig(f"{fdt}_{key}.pdf")
 
 plt.show()
